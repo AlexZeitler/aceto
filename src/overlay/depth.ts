@@ -6,6 +6,10 @@ export function initDepthNavigation(startElement: Element) {
   depthStack = [startElement];
 }
 
+export function clearDepthNavigation() {
+  depthStack = [];
+}
+
 function findFirstChildElement(el: Element): Element | null {
   for (const child of Array.from(el.children)) {
     if (child.tagName && child.id !== "__aceto_host__") {
@@ -15,9 +19,22 @@ function findFirstChildElement(el: Element): Element | null {
   return null;
 }
 
+function isOverSelected(e: WheelEvent, selected: Element): boolean {
+  const rect = selected.getBoundingClientRect();
+  return (
+    e.clientX >= rect.left &&
+    e.clientX <= rect.right &&
+    e.clientY >= rect.top &&
+    e.clientY <= rect.bottom
+  );
+}
+
 function handleWheel(e: WheelEvent) {
   const selected = getSelectedElement();
   if (!selected) return;
+
+  // Only intercept when cursor is over the selected element
+  if (!isOverSelected(e, selected)) return;
 
   e.preventDefault();
   e.stopPropagation();

@@ -1,6 +1,9 @@
 import { watch } from "fs";
+import { readFile } from "fs/promises";
+import path from "path";
 import type { AppState } from "../state";
 import { broadcast } from "./dev-server";
+import { extractBodyContent } from "../utils/html-parser";
 import { log } from "../utils/log";
 
 export function startFileWatcher(state: AppState) {
@@ -12,7 +15,6 @@ export function startFileWatcher(state: AppState) {
     (event, filename) => {
       if (!filename) return;
       if (!filename.endsWith(".html")) return;
-      // Ignore node_modules and hidden directories
       if (filename.includes("node_modules") || filename.startsWith(".")) return;
 
       const existing = debounceTimers.get(filename);
@@ -20,10 +22,23 @@ export function startFileWatcher(state: AppState) {
 
       debounceTimers.set(
         filename,
-        setTimeout(() => {
+        setTimeout(async () => {
           debounceTimers.delete(filename);
           log(`File changed: ${filename}`);
-          broadcast(state, { type: "reload" });
+
+          try {
+            const filePath = path.join(state.projectDir, filename);
+            const html = await readFile(filePath, "utf-8");
+            const bodyContent = extractBodyContent(html);
+
+            if (bodyContent !== null) {
+              broadcast(state, { type: "update", html: bodyContent });
+            } else {
+              broadcast(state, { type: "reload" });
+            }
+          } catch {
+            broadcast(state, { type: "reload" });
+          }
         }, 100),
       );
     },

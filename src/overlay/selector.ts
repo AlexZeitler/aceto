@@ -5,8 +5,9 @@ import {
   hideHover,
   showSelection,
   hideSelection,
+  setUserSelector,
 } from "./highlight";
-import { initDepthNavigation } from "./depth";
+import { initDepthNavigation, clearDepthNavigation } from "./depth";
 
 let selectedElement: Element | null = null;
 let selectMode = true;
@@ -86,6 +87,8 @@ function selectElement(el: Element) {
   const selector = generateSelector(el);
   const meta = getElementMeta(el);
 
+  setUserSelector(selector);
+
   send({
     type: "select",
     selector,
@@ -122,6 +125,18 @@ function init() {
       (e) => {
         if (!selectMode) return;
         if (isOverlayElement(e.target as Element)) return;
+
+        // ESC to deselect
+        if (eventName === "keydown" && (e as KeyboardEvent).key === "Escape") {
+          if (selectedElement) {
+            selectedElement = null;
+            hideSelection();
+            setUserSelector("");
+            clearDepthNavigation();
+            send({ type: "deselect" });
+          }
+          return;
+        }
 
         e.preventDefault();
         e.stopPropagation();

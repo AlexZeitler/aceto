@@ -2,6 +2,7 @@ import { existsSync } from "fs";
 import path from "path";
 import { log } from "../utils/log";
 import type { AppState, SelectionData } from "../state";
+import { pushSelectionHistory } from "../state";
 import { injectOverlay } from "./inject";
 import { handleMcpRequest } from "../mcp/server";
 
@@ -84,8 +85,8 @@ function handleWsMessage(
   data: WsMessage,
 ) {
   switch (data.type) {
-    case "select":
-      state.currentSelection = {
+    case "select": {
+      const selection: SelectionData = {
         selector: data.selector,
         html: data.html,
         tag: data.meta.tag,
@@ -97,8 +98,11 @@ function handleWsMessage(
         page: state.currentPage,
         timestamp: Date.now(),
       };
+      state.currentSelection = selection;
+      pushSelectionHistory(state, selection);
       log(`Selection: ${data.selector}`);
       break;
+    }
     case "ready":
       log("Browser ready");
       break;

@@ -1,3 +1,11 @@
+import { Idiomorph } from "idiomorph";
+import {
+  showAgentHighlight,
+  showAgentHighlights,
+  clearAgentHighlights,
+  flashElement,
+} from "./highlight";
+
 type MessageHandler = (data: any) => void;
 
 const handlers = new Map<string, MessageHandler[]>();
@@ -44,9 +52,46 @@ export function on(type: string, handler: MessageHandler) {
   handlers.set(type, list);
 }
 
-// Handle reload
+// Full reload fallback
 on("reload", () => {
   window.location.reload();
+});
+
+// DOM morphing update
+on("update", (data) => {
+  Idiomorph.morph(document.body, data.html, { morphStyle: "innerHTML" });
+  send({ type: "ready" });
+});
+
+// Agent highlights
+on("highlight", (data) => {
+  showAgentHighlight(data.selector, data.options || {});
+});
+
+on("highlights", (data) => {
+  showAgentHighlights(data.items || []);
+});
+
+on("clear_highlights", () => {
+  clearAgentHighlights();
+});
+
+// Flash feedback after changes
+on("flash", (data) => {
+  flashElement(data.selector);
+});
+
+// Navigation
+on("navigate", (data) => {
+  window.location.href = data.path;
+});
+
+// Scroll to element
+on("scroll_to", (data) => {
+  const el = document.querySelector(data.selector);
+  if (el) {
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
 });
 
 connect();

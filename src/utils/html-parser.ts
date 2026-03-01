@@ -162,6 +162,116 @@ export function replacePage(html: string, newBodyHtml: string): string {
   );
 }
 
+export type InsertPosition = "before" | "after" | "prepend" | "append";
+
+export function insertElement(
+  html: string,
+  selector: string,
+  position: InsertPosition,
+  newHtml: string,
+): string {
+  const info = findElement(html, selector);
+  if (!info) throw new SelectorNotFoundError(selector, html);
+
+  const loc = info.element.sourceCodeLocation!;
+  const indent = detectIndentation(html, info.startOffset);
+  const indentedHtml = indentHtml(newHtml, indent);
+
+  switch (position) {
+    case "before":
+      return html.slice(0, info.startOffset) + indentedHtml + "\n" + indent + html.slice(info.startOffset);
+    case "after":
+      return html.slice(0, info.endOffset) + "\n" + indent + indentedHtml + html.slice(info.endOffset);
+    case "prepend": {
+      const insertAt = loc.startTag!.endOffset;
+      const childIndent = indent + "  ";
+      const indentedChild = indentHtml(newHtml, childIndent);
+      return html.slice(0, insertAt) + "\n" + childIndent + indentedChild + html.slice(insertAt);
+    }
+    case "append": {
+      const insertAt = loc.endTag!.startOffset;
+      const childIndent = indent + "  ";
+      const indentedChild = indentHtml(newHtml, childIndent);
+      return html.slice(0, insertAt) + childIndent + indentedChild + "\n" + indent + html.slice(insertAt);
+    }
+  }
+}
+
+export function deleteElement(html: string, selector: string): string {
+  const info = findElement(html, selector);
+  if (!info) throw new SelectorNotFoundError(selector, html);
+
+  // Remove the element and any leading whitespace on its line
+  let start = info.startOffset;
+  while (start > 0 && html[start - 1] !== "\n" && /\s/.test(html[start - 1])) {
+    start--;
+  }
+  let end = info.endOffset;
+  // Remove trailing newline if present
+  if (html[end] === "\n") {
+    end++;
+  }
+
+  return html.slice(0, start) + html.slice(end);
+}
+
+export function updateText(
+  html: string,
+  selector: string,
+  text: string,
+): string {
+  const info = findElement(html, selector);
+  if (!info) throw new SelectorNotFoundError(selector, html);
+
+  const loc = info.element.sourceCodeLocation!;
+  const contentStart = loc.startTag!.endOffset;
+  const contentEnd = loc.endTag!.startOffset;
+
+  return html.slice(0, contentStart) + text + html.slice(contentEnd);
+}
+
+export function updateAttribute(
+  html: string,
+  selector: string,
+  attr: string,
+  value: string,
+): string {
+  const info = findElement(html, selector);
+  if (!info) throw new SelectorNotFoundError(selector, html);
+
+  const attrLoc = info.element.sourceCodeLocation?.attrs?.[attr];
+  if (attrLoc) {
+    // Replace existing attribute
+    const newAttr = `${attr}="${value}"`;
+    return html.slice(0, attrLoc.startOffset) + newAttr + html.slice(attrLoc.endOffset);
+  }
+
+  // Insert new attribute after tag name
+  const startTag = info.element.sourceCodeLocation!.startTag!;
+  const tagStart = startTag.startOffset;
+  const afterTagName = tagStart + 1 + info.element.tagName.length;
+  return (
+    html.slice(0, afterTagName) +
+    ` ${attr}="${value}"` +
+    html.slice(afterTagName)
+  );
+}
+
+export function extractBodyContent(html: string): string | null {
+  const ast = parse(html, { sourceCodeLocationInfo: true });
+  const body = selectOne("body", ast.childNodes, {
+    adapter: parse5Adapter,
+  }) as Element | null;
+
+  if (!body?.sourceCodeLocation?.startTag || !body?.sourceCodeLocation?.endTag) {
+    return null;
+  }
+
+  const contentStart = body.sourceCodeLocation.startTag.endOffset;
+  const contentEnd = body.sourceCodeLocation.endTag.startOffset;
+  return html.slice(contentStart, contentEnd);
+}
+
 export function getPages(projectDir: string): string[] {
   const glob = new Bun.Glob("**/*.html");
   const pages: string[] = [];
