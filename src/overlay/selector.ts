@@ -150,12 +150,23 @@ function getElementMeta(el: Element) {
   };
 }
 
+function getCleanOuterHTML(el: Element): string {
+  const clone = el.cloneNode(true) as Element;
+  // Remove injected overlay elements from the clone
+  for (const s of Array.from(clone.querySelectorAll("script[data-aceto-overlay]"))) {
+    s.remove();
+  }
+  const host = clone.querySelector("#__aceto_host__");
+  if (host) host.remove();
+  return clone.outerHTML;
+}
+
 function buildSelectPayload(el: Element) {
   const result = generateSelector(el);
   const meta = getElementMeta(el);
   return {
     selector: result.selector,
-    html: el.outerHTML,
+    html: getCleanOuterHTML(el),
     meta,
     ...(result.dataMid ? { dataMid: result.dataMid, fallbackSelector: result.fallbackSelector } : {}),
   };
