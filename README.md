@@ -1,6 +1,6 @@
 # Aceto
 
-A local dev server with a browser overlay and MCP interface for iterating on UIs together with an AI agent.
+A local dev server with a browser overlay and MCP interface for building HTML mockups together with an AI agent.
 
 **Not a drawing tool, not a visual editor.** Instead, a feedback loop between you and an agent:
 
@@ -16,19 +16,72 @@ A local dev server with a browser overlay and MCP interface for iterating on UIs
 - **Real HTML:** No abstraction layer, no component model. The output is a plain HTML file you can read with `cat` and send by email.
 - **Live feedback loop:** DOM morphing keeps scroll position and selection state. You see changes instantly without page reload flicker.
 
-## What Aceto Does
+## Features
 
-- **Serve HTML files** with live reload (DOM morphing, no flickering)
-- **Select elements in the browser** — hover highlighting, click selection, scroll wheel for depth navigation (parent/child)
-- **Expose an MCP interface** for the agent — read, write, highlight, navigate
-- **Inline editing** — double-click to edit text, Tab/Shift+Tab to navigate between table cells
-- **Table controls** — floating toolbar (+Row, −Row, +Col, −Col) when table elements are selected
+### Hover Highlighting
+
+**User** moves the mouse over any element — a blue outline appears with the element's tag and classes.
+
+![Hover Highlighting](docs/screenshots/06-hover-highlight.png)
+
+### Element Selection
+
+**User** clicks an element to select it (pink outline). The breadcrumb bar at the bottom shows the full DOM path. Scroll wheel navigates up/down the tree (parent/child).
+
+![Element Selection](docs/screenshots/04-hero-selection.png)
+
+### Agent Highlight
+
+The **agent** highlights elements in cyan to communicate visually — e.g. to ask "Do you mean this one?":
+
+```
+highlight_element("section#pricing > div:nth-of-type(2)", {
+  label: "Make this card wider?",
+  style: "pulse"
+})
+```
+
+Both selections (pink = user, cyan = agent) can be visible simultaneously.
+
+![Agent Highlight](docs/screenshots/02-agent-highlight.png)
+
+### Inline Text Editing
+
+**User** double-clicks a text element to edit it directly in the browser. Enter to save, Escape to cancel.
+
+![Inline Editing](docs/screenshots/05-inline-editing.png)
+
+### CSS Class Editor
+
+**User** presses `c` on a selected element to edit its Tailwind classes inline. Enter to apply, Escape to cancel.
+
+![CSS Class Editor](docs/screenshots/03-class-editor.png)
+
+### Table Controls
+
+**User** selects a table cell — a floating toolbar appears with +Row, −Row, +Col, −Col controls.
+
+![Table Controls](docs/screenshots/07-table-controls.png)
+
+### DaisyUI Support
+
+Add component libraries via the CLI — DaisyUI components work out of the box with Tailwind v4:
+
+```bash
+aceto add daisyui
+```
+
+![DaisyUI](docs/screenshots/08-daisyui.png)
+
+### More Features
+
 - **Content shortcuts** — type `[]` or `[x]` in a cell to insert a checkbox
 - **Element defaults** — define default classes for generated elements via `aceto.defaults.json`
 - **Paste images** — Ctrl+V with selection inserts instantly; without selection, stages the image for agent-driven placement
-- **CSS class editor** — press `c` on a selected element to edit its Tailwind classes inline; Enter to apply, Escape to cancel
 - **Asset picker** — press `a` to browse and reuse previously pasted images from the assets folder
-- **Screenshots** — the agent can capture full-page or element-level screenshots via `get_screenshot()`, saved to `.aceto/screenshots/`
+- **Yank/Paste** — press `y` to copy a selected element, `p` to paste it after another selection
+- **Screenshots** — the agent captures full-page or element-level screenshots via `get_screenshot()`
+- **Live reload** — DOM morphing keeps scroll position and selection state, no flickering
 
 ## What Aceto Does Not Do
 
@@ -54,12 +107,6 @@ A local dev server with a browser overlay and MCP interface for iterating on UIs
 | Esc | Close modal / deselect |
 | `e` / Alt | Toggle select/preview mode (clears selection) |
 | Ctrl+V | Paste image |
-
-## Bidirectional Communication
-
-- **Your selection (pink):** "I mean this element" — click in the browser
-- **Agent selection (cyan):** "Look at this" — via `highlight_element()` MCP tool
-- **Breadcrumb bar:** Shows both selections + DOM path
 
 ## Getting Started
 
@@ -96,12 +143,6 @@ On `aceto init`, a minimal `CLAUDE.md` is created that tells the agent to call `
 
 To customize the instructions, run `aceto init --eject` to write the defaults into `aceto.md`, then edit to your needs.
 
-## Library Support
-
-Aceto supports adding component libraries via `aceto add <library>`. This inserts CDN links into `index.html` and automatically includes library-specific instructions when the agent calls `get_instructions()`.
-
-Currently supported: **DaisyUI v5** (`aceto add daisyui`)
-
 ## Element Defaults
 
 Create an `aceto.defaults.json` in your project root to define default classes for generated elements:
@@ -117,10 +158,6 @@ Create an `aceto.defaults.json` in your project root to define default classes f
 - **img** — applied to images inserted via paste (Ctrl+V)
 
 The file is hot-reloaded — changes take effect immediately without restarting the server.
-
-## Screenshots
-
-The agent can capture screenshots of the current page or a specific element via the `get_screenshot()` MCP tool. Screenshots are saved to `.aceto/screenshots/` in the project directory. The overlay is automatically hidden during capture.
 
 ## Tech Stack
 
