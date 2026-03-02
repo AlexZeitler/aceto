@@ -45,9 +45,14 @@ Both selections (pink = user, cyan = agent) can be visible simultaneously.
 
 ![Agent Highlight](docs/screenshots/02-agent-highlight.png)
 
-### Inline Text Editing
+### Inline Editing
 
-**User** double-clicks a text element to edit it directly in the browser. Enter to save, Escape to cancel.
+**User** double-clicks any editable element to modify it directly in the browser:
+
+- **Text elements** (headings, paragraphs, links, etc.) — edit the text content. Enter to save, Escape to cancel.
+- **Inputs** — edit the value attribute. Enter to save, Escape to cancel.
+- **Textareas** — edit the value. Ctrl+Enter to save, Escape to cancel, Enter adds a newline.
+- **Checkboxes / Radio buttons** — double-click to enter edit mode, Space to toggle, Enter to save, Escape to cancel.
 
 ![Inline Editing](docs/screenshots/05-inline-editing.png)
 
@@ -94,7 +99,7 @@ aceto add daisyui
 | Key | Action |
 |-----|--------|
 | Click | Select element |
-| Double-click | Inline edit text |
+| Double-click | Inline edit (text, input value, checkbox toggle) |
 | Scroll wheel | Navigate depth (parent/child) |
 | Tab / Shift+Tab | Next/previous cell (during table editing) |
 | `c` | Edit CSS classes of selected element |
@@ -104,7 +109,8 @@ aceto add daisyui
 | `r` | Redo |
 | `a` | Open asset picker |
 | Del | Delete selected element |
-| Esc | Close modal / deselect |
+| Space | Toggle checkbox/radio (during edit mode) |
+| Esc | Close modal / deselect / cancel edit |
 | `e` / Alt | Toggle select/preview mode (clears selection) |
 | Ctrl+V | Paste image |
 

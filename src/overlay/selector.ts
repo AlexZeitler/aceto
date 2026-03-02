@@ -288,14 +288,20 @@ function isValueElement(el: Element): boolean {
   const tag = el.tagName.toLowerCase();
   if (tag === "input") {
     const type = (el as HTMLInputElement).type.toLowerCase();
-    // Only text-like inputs are editable
     return ["text", "email", "url", "tel", "search", "password", "number"].includes(type);
   }
   return tag === "textarea";
 }
 
+function isCheckable(el: Element): boolean {
+  if (el.tagName.toLowerCase() !== "input") return false;
+  const type = (el as HTMLInputElement).type.toLowerCase();
+  return type === "checkbox" || type === "radio";
+}
+
 function isEditableElement(el: Element): boolean {
   if (isValueElement(el)) return true;
+  if (isCheckable(el)) return true;
   const tag = el.tagName.toLowerCase();
   if (EDITABLE_TAGS.has(tag)) return true;
 
@@ -319,7 +325,10 @@ function startEditing(el: HTMLElement) {
   if (editingElement) return;
   editingElement = el;
 
-  if (isValueElement(el)) {
+  if (isCheckable(el)) {
+    const input = el as HTMLInputElement;
+    editOriginalText = input.checked ? "checked" : "";
+  } else if (isValueElement(el)) {
     const input = el as HTMLInputElement | HTMLTextAreaElement;
     editOriginalText = input.value;
     input.focus();
@@ -348,7 +357,25 @@ function commitEdit() {
   if (!editingElement) return;
   const el = editingElement;
 
-  if (isValueElement(el)) {
+  if (isCheckable(el)) {
+    const input = el as HTMLInputElement;
+    const wasChecked = editOriginalText === "checked";
+    el.style.outline = "";
+    el.style.outlineOffset = "";
+
+    if (input.checked !== wasChecked) {
+      const result = generateSelector(el);
+      const fallback = generateFallbackSelector(el);
+      send({
+        type: "checked_edit",
+        selector: result.selector,
+        fallbackSelector: fallback,
+        checked: input.checked,
+        inputType: input.type.toLowerCase(),
+        name: input.name || undefined,
+      });
+    }
+  } else if (isValueElement(el)) {
     const input = el as HTMLInputElement | HTMLTextAreaElement;
     const newValue = input.value;
     el.style.outline = "";
@@ -401,7 +428,9 @@ function commitEdit() {
 
 function cancelEdit() {
   if (!editingElement) return;
-  if (isValueElement(editingElement)) {
+  if (isCheckable(editingElement)) {
+    (editingElement as HTMLInputElement).checked = editOriginalText === "checked";
+  } else if (isValueElement(editingElement)) {
     (editingElement as HTMLInputElement | HTMLTextAreaElement).value = editOriginalText;
     (editingElement as HTMLElement).blur();
   } else {
@@ -551,7 +580,10 @@ function init() {
         // While editing, allow normal keyboard/mouse interaction in the edited element
         if (isEditing()) {
           const target = e.target as Element;
-          if (editingElement && (editingElement === target || editingElement.contains(target))) {
+          const isEditTarget = editingElement && (editingElement === target || editingElement.contains(target));
+          // Checkboxes don't receive focus, so handle keys regardless of target
+          const isCheckableEdit = editingElement && isCheckable(editingElement);
+          if (isEditTarget || isCheckableEdit) {
             // Handle Enter, Escape, Tab during editing
             if (eventName === "keydown") {
               const ke = e as KeyboardEvent;
@@ -568,6 +600,25 @@ function init() {
                 if (!ke.shiftKey) {
                   e.preventDefault();
                   commitEdit();
+                }
+                return;
+              }
+              if (key === " " && editingElement && isCheckable(editingElement)) {
+                e.preventDefault();
+                const input = editingElement as HTMLInputElement;
+                if (input.type.toLowerCase() === "radio") {
+                  // Radio: can only check, not uncheck
+                  if (!input.checked) {
+                    // Uncheck siblings in the same group
+                    if (input.name) {
+                      document.querySelectorAll(`input[type="radio"][name="${CSS.escape(input.name)}"]`).forEach((r) => {
+                        (r as HTMLInputElement).checked = false;
+                      });
+                    }
+                    input.checked = true;
+                  }
+                } else {
+                  input.checked = !input.checked;
                 }
                 return;
               }

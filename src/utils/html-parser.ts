@@ -302,6 +302,71 @@ export function updateAttribute(
   );
 }
 
+export function setBooleanAttribute(
+  html: string,
+  selector: string,
+  attr: string,
+  value: boolean,
+): string {
+  const info = findElement(html, selector);
+  if (!info) throw new SelectorNotFoundError(selector, html);
+
+  const attrLoc = info.element.sourceCodeLocation?.attrs?.[attr];
+
+  if (value && !attrLoc) {
+    // Add boolean attribute
+    const startTag = info.element.sourceCodeLocation!.startTag!;
+    const tagStart = startTag.startOffset;
+    const afterTagName = tagStart + 1 + info.element.tagName.length;
+    return html.slice(0, afterTagName) + ` ${attr}` + html.slice(afterTagName);
+  }
+
+  if (!value && attrLoc) {
+    // Remove boolean attribute (and leading whitespace)
+    let start = attrLoc.startOffset;
+    while (start > 0 && html[start - 1] === " ") start--;
+    return html.slice(0, start) + html.slice(attrLoc.endOffset);
+  }
+
+  return html; // Already in desired state
+}
+
+export function uncheckRadioGroup(
+  html: string,
+  name: string,
+  excludeSelector: string,
+): string {
+  const ast = parse(html, { sourceCodeLocationInfo: true });
+  const radios = selectAll(`input[type="radio"][name="${name}"]`, ast.childNodes, {
+    adapter: parse5Adapter,
+  }) as Element[];
+
+  // Find the element to exclude
+  const excludeEl = selectOne(excludeSelector, ast.childNodes, {
+    adapter: parse5Adapter,
+  }) as Element | null;
+
+  // Collect offsets of `checked` attributes to remove (in reverse order for stable splicing)
+  const removals: { start: number; end: number }[] = [];
+  for (const radio of radios) {
+    if (radio === excludeEl) continue;
+    const checkedLoc = radio.sourceCodeLocation?.attrs?.["checked"];
+    if (checkedLoc) {
+      let start = checkedLoc.startOffset;
+      while (start > 0 && html[start - 1] === " ") start--;
+      removals.push({ start, end: checkedLoc.endOffset });
+    }
+  }
+
+  // Apply removals from end to start
+  removals.sort((a, b) => b.start - a.start);
+  let result = html;
+  for (const { start, end } of removals) {
+    result = result.slice(0, start) + result.slice(end);
+  }
+  return result;
+}
+
 export function extractBodyContent(html: string): string | null {
   const ast = parse(html, { sourceCodeLocationInfo: true });
   const body = selectOne("body", ast.childNodes, {

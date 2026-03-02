@@ -6,7 +6,7 @@ import type { AppState, SelectionData } from "../state";
 import { pushSelectionHistory, getNextMid, getFileHistory } from "../state";
 import { injectOverlay } from "./inject";
 import { handleMcpRequest } from "../mcp/server";
-import { addDataMid, updateText, updateAttribute, getPages, extractBodyContent } from "../utils/html-parser";
+import { addDataMid, updateText, updateAttribute, setBooleanAttribute, uncheckRadioGroup, getPages, extractBodyContent } from "../utils/html-parser";
 import {
   undo,
   redo,
@@ -152,6 +152,15 @@ interface WsValueEditMessage {
   value: string;
 }
 
+interface WsCheckedEditMessage {
+  type: "checked_edit";
+  selector: string;
+  fallbackSelector?: string;
+  checked: boolean;
+  inputType?: string;
+  name?: string;
+}
+
 interface WsShortcutExpandMessage {
   type: "shortcut_expand";
   selector: string;
@@ -183,7 +192,7 @@ interface WsPickAssetMessage {
   path: string;
 }
 
-type WsMessage = WsSelectMessage | WsMultiSelectMessage | WsNavigateMessage | WsReadyMessage | WsDeselectMessage | WsTextEditMessage | WsValueEditMessage | WsUndoRedoMessage | WsDeleteElementMessage | WsTableOpMessage | WsShortcutExpandMessage | WsClassEditMessage | WsPasteElementMessage | WsListAssetsMessage | WsPickAssetMessage;
+type WsMessage = WsSelectMessage | WsMultiSelectMessage | WsNavigateMessage | WsReadyMessage | WsDeselectMessage | WsTextEditMessage | WsValueEditMessage | WsCheckedEditMessage | WsUndoRedoMessage | WsDeleteElementMessage | WsTableOpMessage | WsShortcutExpandMessage | WsClassEditMessage | WsPasteElementMessage | WsListAssetsMessage | WsPickAssetMessage;
 
 function handleWsMessage(
   state: AppState,
@@ -308,6 +317,31 @@ function handleWsMessage(
         }
       } catch (e: any) {
         log(`Value edit failed: ${e.message}`);
+      }
+      break;
+    }
+    case "checked_edit": {
+      try {
+        const filePath = resolveCurrentFilePath(state);
+        let html = readFileSync(filePath, "utf-8");
+        const selector = data.fallbackSelector || data.selector;
+
+        // For radio buttons: uncheck all others in the same group first
+        if (data.checked && data.inputType === "radio" && data.name) {
+          html = uncheckRadioGroup(html, data.name, selector);
+        }
+
+        const newHtml = setBooleanAttribute(html, selector, "checked", data.checked);
+        const originalHtml = readFileSync(filePath, "utf-8");
+        if (newHtml !== originalHtml) {
+          const history = getFileHistory(state, filePath);
+          history.pushEdit(originalHtml, newHtml);
+          state.recentServerWrites.add(filePath);
+          writeFileSync(filePath, newHtml, "utf-8");
+          log(`Checked edit: ${selector} → ${data.checked}`);
+        }
+      } catch (e: any) {
+        log(`Checked edit failed: ${e.message}`);
       }
       break;
     }
