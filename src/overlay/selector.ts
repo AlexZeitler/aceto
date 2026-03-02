@@ -714,8 +714,9 @@ function init() {
     true,
   );
 
-  // Re-position selection overlay on scroll
+  // Re-position selection overlay on scroll, hide hover
   document.addEventListener("scroll", () => {
+    hideHover();
     const valid = selectedElements.filter((el) => document.contains(el));
     if (valid.length === 1) {
       showSelection(valid[0]);
