@@ -70,6 +70,7 @@ export interface AppState {
   activeClient: ServerWebSocket<unknown> | null;
   nextMid: number;
   twDebug: string | null;
+  lastPastedImage: string | null;
 }
 
 export function getNextMid(state: AppState): string {
@@ -116,5 +117,6 @@ export function createState(opts: {
     activeClient: null,
     nextMid: 1,
     twDebug: opts.twDebug ?? null,
+    lastPastedImage: null,
   };
 }

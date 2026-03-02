@@ -255,6 +255,53 @@ function isEditing(): boolean {
   return editingElement !== null;
 }
 
+function handleClipboardPaste() {
+  // Create a hidden editable element so the browser fires a paste event
+  const receiver = document.createElement("textarea");
+  receiver.style.cssText = "position:fixed;left:-9999px;top:-9999px;opacity:0;width:1px;height:1px;";
+  document.body.appendChild(receiver);
+  receiver.focus();
+
+  const cleanup = () => receiver.remove();
+
+  receiver.addEventListener("paste", (e: ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) { cleanup(); return; }
+
+    let imageItem: DataTransferItem | null = null;
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith("image/")) {
+        imageItem = item;
+        break;
+      }
+    }
+    if (!imageItem) { cleanup(); return; }
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    const blob = imageItem.getAsFile();
+    if (!blob) { cleanup(); return; }
+
+    const port = (window as any).__ACETO_WS_PORT__ || 3000;
+    const selector = selectedElement ? generateSelector(selectedElement).selector : "";
+
+    const formData = new FormData();
+    formData.append("image", blob);
+    formData.append("selector", selector);
+
+    fetch(`http://localhost:${port}/api/paste-image`, {
+      method: "POST",
+      body: formData,
+    }).catch(() => {});
+
+    cleanup();
+  });
+
+  // Fallback cleanup
+  setTimeout(cleanup, 1000);
+}
+
 function init() {
   initHighlightHost();
 
@@ -333,6 +380,15 @@ function init() {
           }
         }
 
+        // Ctrl+V / Cmd+V → set up paste receiver (don't preventDefault — paste needs it)
+        if (eventName === "keydown") {
+          const ke = e as KeyboardEvent;
+          if ((ke.ctrlKey || ke.metaKey) && ke.key === "v") {
+            handleClipboardPaste();
+            return;
+          }
+        }
+
         // ESC to deselect
         if (eventName === "keydown" && (e as KeyboardEvent).key === "Escape") {
           if (selectedElement) {
@@ -341,6 +397,19 @@ function init() {
             setUserSelector("");
             clearDepthNavigation();
             send({ type: "deselect" });
+          }
+          return;
+        }
+
+        // DEL to delete selected element
+        if (eventName === "keydown" && (e as KeyboardEvent).key === "Delete") {
+          if (selectedElement) {
+            const result = generateSelector(selectedElement);
+            send({ type: "delete_element", selector: result.selector });
+            selectedElement = null;
+            hideSelection();
+            setUserSelector("");
+            clearDepthNavigation();
           }
           return;
         }

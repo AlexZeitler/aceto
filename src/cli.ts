@@ -77,6 +77,8 @@ Aceto is an AI-powered mockup tool — a local dev server with a browser overlay
 - Do NOT ask if the result looks good or announce that you completed a change — the user sees the live preview and will give feedback when needed
 - After taking a screenshot, do NOT ask follow-up questions like "what do you think?" or "should I change something?" — just present the screenshot silently
 - Just make the change and stay silent until the user responds
+- **Image paste with selection:** When the user pastes an image (Ctrl+V) with an element selected, the image is automatically saved to \`assets/\` and inserted after the selection. No action needed from you.
+- **Image paste without selection:** The image is saved to \`assets/\` and a thumbnail appears in the status bar. The path is available via \`get_selected_element()\` as \`lastPastedImage\`. Wait for the user to tell you what to do with it (e.g. "use this as hero background", "replace the card image").
 `;
 
 function parseArgs() {

@@ -5,6 +5,7 @@ import {
   clearAgentHighlights,
   flashElement,
   initHighlightHost,
+  showPastedImage,
 } from "./highlight";
 import { initDebugScreens } from "./debug-screens";
 
@@ -94,6 +95,11 @@ on("scroll_to", (data) => {
   if (el) {
     el.scrollIntoView({ behavior: "smooth", block: "center" });
   }
+});
+
+// Pasted image thumbnail
+on("image_pasted", (data) => {
+  showPastedImage(data.path);
 });
 
 // Mid counter sync

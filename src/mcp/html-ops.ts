@@ -64,8 +64,12 @@ export async function getCurrentPage(state: AppState) {
 }
 
 export function getSelectedElement(state: AppState) {
-  if (!state.currentSelection) return { selected: false as const };
-  return { selected: true as const, ...state.currentSelection };
+  const base = !state.currentSelection
+    ? { selected: false as const }
+    : { selected: true as const, ...state.currentSelection };
+  return state.lastPastedImage
+    ? { ...base, lastPastedImage: state.lastPastedImage }
+    : base;
 }
 
 export async function getPages(state: AppState) {

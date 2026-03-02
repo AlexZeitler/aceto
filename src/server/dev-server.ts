@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, writeFileSync } from "fs";
+import { mkdir, writeFile as writeFileAsync } from "fs/promises";
 import path from "path";
 import { log } from "../utils/log";
 import type { AppState, SelectionData } from "../state";
@@ -6,7 +7,7 @@ import { pushSelectionHistory, getNextMid, getFileHistory } from "../state";
 import { injectOverlay } from "./inject";
 import { handleMcpRequest } from "../mcp/server";
 import { addDataMid, updateText } from "../utils/html-parser";
-import { undo, redo } from "../mcp/html-ops";
+import { undo, redo, deleteElement, insertElement } from "../mcp/html-ops";
 
 const MIME_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -97,7 +98,12 @@ interface WsUndoRedoMessage {
   type: "undo" | "redo";
 }
 
-type WsMessage = WsSelectMessage | WsNavigateMessage | WsReadyMessage | WsDeselectMessage | WsTextEditMessage | WsUndoRedoMessage;
+interface WsDeleteElementMessage {
+  type: "delete_element";
+  selector: string;
+}
+
+type WsMessage = WsSelectMessage | WsNavigateMessage | WsReadyMessage | WsDeselectMessage | WsTextEditMessage | WsUndoRedoMessage | WsDeleteElementMessage;
 
 function handleWsMessage(
   state: AppState,
@@ -184,6 +190,15 @@ function handleWsMessage(
       });
       break;
     }
+    case "delete_element": {
+      state.currentSelection = null;
+      deleteElement(state, data.selector).then((result) => {
+        log(result.success ? `Deleted: ${data.selector}` : `Delete failed`);
+      }).catch((e: any) => {
+        log(`Delete failed: ${e.message}`);
+      });
+      break;
+    }
   }
 }
 
@@ -208,6 +223,52 @@ function persistDataMid(state: AppState, fallbackSelector: string, mid: string) 
   }
 }
 
+const MIME_TO_EXT: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/gif": "gif",
+  "image/webp": "webp",
+};
+
+async function handlePasteImage(state: AppState, req: Request): Promise<Response> {
+  try {
+    const formData = await req.formData();
+    const image = formData.get("image") as File | null;
+    const selector = (formData.get("selector") as string) || "";
+
+    if (!image || !image.type.startsWith("image/")) {
+      return Response.json({ error: "No image provided" }, { status: 400 });
+    }
+
+    const ext = MIME_TO_EXT[image.type] || "png";
+    const filename = `paste-${Date.now()}.${ext}`;
+    const assetsDir = path.join(state.projectDir, "assets");
+    await mkdir(assetsDir, { recursive: true });
+
+    const buffer = await image.arrayBuffer();
+    await writeFileAsync(path.join(assetsDir, filename), Buffer.from(buffer));
+
+    const assetPath = `/assets/${filename}`;
+    state.lastPastedImage = assetPath;
+
+    if (selector) {
+      // Element selected → insert immediately after selection
+      const imgTag = `<img src="${assetPath}" alt="" class="max-w-full h-auto">`;
+      await insertElement(state, selector, "after", imgTag);
+      log(`Pasted image after ${selector}: ${assetPath}`);
+    } else {
+      // No selection → store for agent, show thumbnail in overlay
+      broadcast(state, { type: "image_pasted", path: assetPath });
+      log(`Pasted image (staged for agent): ${assetPath}`);
+    }
+
+    return Response.json({ success: true, file: `assets/${filename}`, path: assetPath });
+  } catch (e: any) {
+    log(`Paste image failed: ${e.message}`);
+    return Response.json({ error: e.message }, { status: 500 });
+  }
+}
+
 export function startDevServer(state: AppState) {
   const server = Bun.serve({
     port: state.port,
@@ -217,6 +278,11 @@ export function startDevServer(state: AppState) {
       // MCP endpoint
       if (url.pathname === "/mcp") {
         return handleMcpRequest(req);
+      }
+
+      // Paste image endpoint
+      if (url.pathname === "/api/paste-image" && req.method === "POST") {
+        return handlePasteImage(state, req);
       }
 
       // WebSocket upgrade

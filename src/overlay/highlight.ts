@@ -10,6 +10,7 @@ let agentHighlightContainer: HTMLElement | null = null;
 let modeToggleButton: HTMLElement | null = null;
 let undoButton: HTMLElement | null = null;
 let redoButton: HTMLElement | null = null;
+let pasteImageIndicator: HTMLElement | null = null;
 
 let currentUserSelector = "";
 let currentAgentSelector = "";
@@ -160,6 +161,40 @@ export function initHighlightHost(): ShadowRoot {
     .aceto-mode-preview {
       background: #15803d;
     }
+    .aceto-paste-indicator {
+      display: none;
+      align-items: center;
+      gap: 4px;
+      pointer-events: auto;
+      padding: 1px 6px;
+      border-radius: 3px;
+      background: #1e293b;
+      border: 1px solid #475569;
+      cursor: default;
+    }
+    .aceto-paste-indicator img {
+      width: 18px;
+      height: 18px;
+      object-fit: cover;
+      border-radius: 2px;
+    }
+    .aceto-paste-indicator span {
+      color: #94a3b8;
+      font: 10px/1 ui-monospace, monospace;
+      max-width: 120px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .aceto-paste-dismiss {
+      color: #64748b;
+      cursor: pointer;
+      font-size: 13px;
+      line-height: 1;
+      padding: 0 2px;
+    }
+    .aceto-paste-dismiss:hover {
+      color: #e2e8f0;
+    }
   `;
   shadowRoot.appendChild(style);
 
@@ -206,6 +241,10 @@ export function initHighlightHost(): ShadowRoot {
   // Toolbar container (undo, redo, mode toggle) — pushed right via margin-left: auto
   const toolbar = document.createElement("div");
   toolbar.className = "aceto-toolbar";
+
+  pasteImageIndicator = document.createElement("div");
+  pasteImageIndicator.className = "aceto-paste-indicator";
+  toolbar.appendChild(pasteImageIndicator);
 
   undoButton = document.createElement("button");
   undoButton.className = "aceto-undo-redo";
@@ -439,6 +478,32 @@ export function updateModeIndicator(isSelectMode: boolean) {
     modeToggleButton.textContent = "Preview";
     modeToggleButton.className = "aceto-mode-toggle aceto-mode-preview";
   }
+}
+
+export function showPastedImage(imagePath: string) {
+  if (!pasteImageIndicator) return;
+  const img = document.createElement("img");
+  img.src = imagePath;
+  const label = document.createElement("span");
+  label.textContent = imagePath.split("/").pop() || imagePath;
+  label.title = imagePath;
+  const dismiss = document.createElement("span");
+  dismiss.className = "aceto-paste-dismiss";
+  dismiss.textContent = "\u00D7";
+  dismiss.title = "Dismiss";
+  dismiss.addEventListener("click", () => clearPastedImage());
+
+  pasteImageIndicator.innerHTML = "";
+  pasteImageIndicator.appendChild(img);
+  pasteImageIndicator.appendChild(label);
+  pasteImageIndicator.appendChild(dismiss);
+  pasteImageIndicator.style.display = "flex";
+}
+
+export function clearPastedImage() {
+  if (!pasteImageIndicator) return;
+  pasteImageIndicator.innerHTML = "";
+  pasteImageIndicator.style.display = "none";
 }
 
 function updateBreadcrumb() {
