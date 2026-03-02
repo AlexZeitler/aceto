@@ -108,10 +108,19 @@ aceto add daisyui
 | `e` / Alt | Toggle select/preview mode (clears selection) |
 | Ctrl+V | Paste image |
 
+## Installation
+
+```bash
+bun install -g github:alexzeitler/aceto
+```
+
+Requires [Bun](https://bun.sh/) runtime.
+
 ## Getting Started
 
 ```bash
 # Create a new project
+mkdir my-mockup && cd my-mockup
 aceto init
 
 # Start the dev server
