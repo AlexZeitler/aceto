@@ -7,6 +7,8 @@ import {
   hideSelection,
   setUserSelector,
   getModeToggleButton,
+  getUndoButton,
+  getRedoButton,
   updateModeIndicator,
 } from "./highlight";
 import { initDepthNavigation, clearDepthNavigation } from "./depth";
@@ -269,6 +271,31 @@ function init() {
     });
   }
 
+  // Set up undo/redo buttons
+  const undoBtn = getUndoButton();
+  if (undoBtn) {
+    undoBtn.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+    });
+    undoBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      send({ type: "undo" });
+    });
+  }
+
+  const redoBtn = getRedoButton();
+  if (redoBtn) {
+    redoBtn.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+    });
+    redoBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      send({ type: "redo" });
+    });
+  }
+
   // Prevent all default interactions in select mode
   const blockEvents = ["click", "mousedown", "mouseup", "submit", "keydown", "keypress", "keyup", "contextmenu"];
 
@@ -392,6 +419,13 @@ function init() {
     },
     true,
   );
+
+  // Re-position selection overlay on scroll
+  document.addEventListener("scroll", () => {
+    if (selectedElement && document.contains(selectedElement)) {
+      showSelection(selectedElement);
+    }
+  }, { capture: true, passive: true });
 
   // Toggle select mode with Alt key
   document.addEventListener("keydown", (e) => {

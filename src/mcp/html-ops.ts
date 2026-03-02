@@ -33,7 +33,7 @@ async function writeWithHistory(
   newHtml: string,
 ) {
   const history = getFileHistory(state, filePath);
-  history.push(oldHtml);
+  history.pushEdit(oldHtml, newHtml);
   await writeFile(filePath, newHtml, "utf-8");
 }
 

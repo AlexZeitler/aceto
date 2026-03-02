@@ -24,11 +24,15 @@ export class FileHistory {
   private pointer = -1;
   private maxSize = 50;
 
-  push(content: string) {
+  pushEdit(oldContent: string, newContent: string) {
     // Discard any redo entries
     this.stack = this.stack.slice(0, this.pointer + 1);
-    this.stack.push(content);
-    if (this.stack.length > this.maxSize) {
+    // On first edit, save the initial state so undo can reach it
+    if (this.stack.length === 0) {
+      this.stack.push(oldContent);
+    }
+    this.stack.push(newContent);
+    while (this.stack.length > this.maxSize) {
       this.stack.shift();
     }
     this.pointer = this.stack.length - 1;

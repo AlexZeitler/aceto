@@ -8,6 +8,8 @@ let breadcrumbAgentSpan: HTMLElement | null = null;
 let breadcrumbPathSpan: HTMLElement | null = null;
 let agentHighlightContainer: HTMLElement | null = null;
 let modeToggleButton: HTMLElement | null = null;
+let undoButton: HTMLElement | null = null;
+let redoButton: HTMLElement | null = null;
 
 let currentUserSelector = "";
 let currentAgentSelector = "";
@@ -116,6 +118,28 @@ export function initHighlightHost(): ShadowRoot {
       overflow: hidden;
       text-overflow: ellipsis;
     }
+    .aceto-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-left: auto;
+    }
+    .aceto-undo-redo {
+      pointer-events: auto;
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: 3px;
+      border: 1px solid transparent;
+      background: transparent;
+      font: 11px/1.4 ui-monospace, monospace;
+      color: #94a3b8;
+      white-space: nowrap;
+      user-select: none;
+    }
+    .aceto-undo-redo:hover {
+      border-color: #475569;
+      color: #e2e8f0;
+    }
     .aceto-mode-toggle {
       pointer-events: auto;
       cursor: pointer;
@@ -125,7 +149,6 @@ export function initHighlightHost(): ShadowRoot {
       font: 11px/1.4 ui-monospace, monospace;
       color: #e2e8f0;
       white-space: nowrap;
-      margin-left: auto;
       user-select: none;
     }
     .aceto-mode-toggle:hover {
@@ -180,11 +203,28 @@ export function initHighlightHost(): ShadowRoot {
   breadcrumbBar.appendChild(sep);
   breadcrumbBar.appendChild(breadcrumbPathSpan);
 
-  // Mode toggle button
+  // Toolbar container (undo, redo, mode toggle) — pushed right via margin-left: auto
+  const toolbar = document.createElement("div");
+  toolbar.className = "aceto-toolbar";
+
+  undoButton = document.createElement("button");
+  undoButton.className = "aceto-undo-redo";
+  undoButton.textContent = "\u21B6";
+  undoButton.title = "Undo";
+  toolbar.appendChild(undoButton);
+
+  redoButton = document.createElement("button");
+  redoButton.className = "aceto-undo-redo";
+  redoButton.textContent = "\u21B7";
+  redoButton.title = "Redo";
+  toolbar.appendChild(redoButton);
+
   modeToggleButton = document.createElement("button");
   modeToggleButton.className = "aceto-mode-toggle aceto-mode-select";
   modeToggleButton.textContent = "Select";
-  breadcrumbBar.appendChild(modeToggleButton);
+  toolbar.appendChild(modeToggleButton);
+
+  breadcrumbBar.appendChild(toolbar);
 
   shadowRoot.appendChild(breadcrumbBar);
 
@@ -380,6 +420,14 @@ function buildSelectorPath(selector: string): string {
 
 export function getModeToggleButton(): HTMLElement | null {
   return modeToggleButton;
+}
+
+export function getUndoButton(): HTMLElement | null {
+  return undoButton;
+}
+
+export function getRedoButton(): HTMLElement | null {
+  return redoButton;
 }
 
 export function updateModeIndicator(isSelectMode: boolean) {

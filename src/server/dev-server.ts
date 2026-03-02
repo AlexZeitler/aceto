@@ -6,6 +6,7 @@ import { pushSelectionHistory, getNextMid, getFileHistory } from "../state";
 import { injectOverlay } from "./inject";
 import { handleMcpRequest } from "../mcp/server";
 import { addDataMid, updateText } from "../utils/html-parser";
+import { undo, redo } from "../mcp/html-ops";
 
 const MIME_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -92,7 +93,11 @@ interface WsTextEditMessage {
   text: string;
 }
 
-type WsMessage = WsSelectMessage | WsNavigateMessage | WsReadyMessage | WsDeselectMessage | WsTextEditMessage;
+interface WsUndoRedoMessage {
+  type: "undo" | "redo";
+}
+
+type WsMessage = WsSelectMessage | WsNavigateMessage | WsReadyMessage | WsDeselectMessage | WsTextEditMessage | WsUndoRedoMessage;
 
 function handleWsMessage(
   state: AppState,
@@ -158,13 +163,25 @@ function handleWsMessage(
         const newHtml = updateText(html, selector, data.text);
         if (newHtml !== html) {
           const history = getFileHistory(state, filePath);
-          history.push(html);
+          history.pushEdit(html, newHtml);
           writeFileSync(filePath, newHtml, "utf-8");
           log(`Text edit: ${selector} → "${data.text.slice(0, 50)}"`);
         }
       } catch (e: any) {
         log(`Text edit failed: ${e.message}`);
       }
+      break;
+    }
+    case "undo": {
+      undo(state).then((result) => {
+        log(result.success ? "Undo" : `Undo failed: ${result.reason}`);
+      });
+      break;
+    }
+    case "redo": {
+      redo(state).then((result) => {
+        log(result.success ? "Redo" : `Redo failed: ${result.reason}`);
+      });
       break;
     }
   }
