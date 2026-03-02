@@ -138,7 +138,16 @@ interface WsShortcutExpandMessage {
   html: string;
 }
 
-type WsMessage = WsSelectMessage | WsNavigateMessage | WsReadyMessage | WsDeselectMessage | WsTextEditMessage | WsUndoRedoMessage | WsDeleteElementMessage | WsTableOpMessage | WsShortcutExpandMessage;
+interface WsListAssetsMessage {
+  type: "list_assets";
+}
+
+interface WsPickAssetMessage {
+  type: "pick_asset";
+  path: string;
+}
+
+type WsMessage = WsSelectMessage | WsNavigateMessage | WsReadyMessage | WsDeselectMessage | WsTextEditMessage | WsUndoRedoMessage | WsDeleteElementMessage | WsTableOpMessage | WsShortcutExpandMessage | WsListAssetsMessage | WsPickAssetMessage;
 
 function handleWsMessage(
   state: AppState,
@@ -284,6 +293,33 @@ function handleWsMessage(
       } catch (e: any) {
         log(`Shortcut expand failed: ${e.message}`);
       }
+      break;
+    }
+    case "list_assets": {
+      try {
+        const assetsDir = path.join(state.projectDir, "assets");
+        const assets: Array<{ path: string; name: string }> = [];
+        if (existsSync(assetsDir)) {
+          const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"]);
+          for (const entry of require("fs").readdirSync(assetsDir)) {
+            const ext = path.extname(entry).toLowerCase();
+            if (IMAGE_EXTS.has(ext)) {
+              assets.push({ path: `/assets/${entry}`, name: entry });
+            }
+          }
+          assets.sort((a, b) => a.name.localeCompare(b.name));
+        }
+        ws.send(JSON.stringify({ type: "assets_list", assets }));
+      } catch (e: any) {
+        log(`List assets failed: ${e.message}`);
+        ws.send(JSON.stringify({ type: "assets_list", assets: [] }));
+      }
+      break;
+    }
+    case "pick_asset": {
+      state.lastPastedImage = data.path;
+      broadcast(state, { type: "image_pasted", path: data.path });
+      log(`Asset picked: ${data.path}`);
       break;
     }
   }

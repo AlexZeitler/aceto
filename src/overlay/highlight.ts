@@ -14,6 +14,7 @@ let pasteImageIndicator: HTMLElement | null = null;
 let pageButton: HTMLElement | null = null;
 let pageDropdown: HTMLElement | null = null;
 let tableToolbar: HTMLElement | null = null;
+let assetModal: HTMLElement | null = null;
 
 let currentUserSelector = "";
 let currentAgentSelector = "";
@@ -303,6 +304,97 @@ export function initHighlightHost(): ShadowRoot {
       background: #475569;
       margin: 0 2px;
     }
+    /* Asset picker modal */
+    .aceto-asset-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      pointer-events: auto;
+      z-index: 2147483647;
+    }
+    .aceto-asset-backdrop.open {
+      display: flex;
+    }
+    .aceto-asset-modal {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      max-width: 600px;
+      max-height: 70vh;
+      width: 90vw;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .aceto-asset-header {
+      padding: 10px 14px;
+      font: 12px/1.4 ui-monospace, monospace;
+      color: #e2e8f0;
+      border-bottom: 1px solid #334155;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .aceto-asset-close {
+      cursor: pointer;
+      color: #64748b;
+      font-size: 16px;
+      line-height: 1;
+      padding: 0 4px;
+      border: none;
+      background: none;
+    }
+    .aceto-asset-close:hover {
+      color: #e2e8f0;
+    }
+    .aceto-asset-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+      gap: 8px;
+      padding: 12px;
+      overflow-y: auto;
+    }
+    .aceto-asset-item {
+      cursor: pointer;
+      border: 2px solid transparent;
+      border-radius: 6px;
+      padding: 6px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      transition: border-color 0.1s;
+    }
+    .aceto-asset-item:hover {
+      border-color: #3b82f6;
+      background: rgba(59,130,246,0.08);
+    }
+    .aceto-asset-thumb {
+      width: 80px;
+      height: 80px;
+      object-fit: cover;
+      border-radius: 4px;
+      background: #0f172a;
+    }
+    .aceto-asset-name {
+      font: 10px/1.2 ui-monospace, monospace;
+      color: #94a3b8;
+      max-width: 90px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      text-align: center;
+    }
+    .aceto-asset-empty {
+      padding: 24px;
+      text-align: center;
+      font: 11px/1.4 ui-monospace, monospace;
+      color: #64748b;
+    }
   `;
   shadowRoot.appendChild(style);
 
@@ -418,6 +510,11 @@ export function initHighlightHost(): ShadowRoot {
   tableToolbar = document.createElement("div");
   tableToolbar.className = "aceto-table-toolbar";
   shadowRoot.appendChild(tableToolbar);
+
+  // Asset picker modal
+  assetModal = document.createElement("div");
+  assetModal.className = "aceto-asset-backdrop";
+  shadowRoot.appendChild(assetModal);
 
   document.documentElement.appendChild(host);
   return shadowRoot;
@@ -623,6 +720,10 @@ export function getRedoButton(): HTMLElement | null {
 
 export function getTableToolbar(): HTMLElement | null {
   return tableToolbar;
+}
+
+export function getAssetModal(): HTMLElement | null {
+  return assetModal;
 }
 
 export function updateModeIndicator(isSelectMode: boolean) {

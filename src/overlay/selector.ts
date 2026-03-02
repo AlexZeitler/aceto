@@ -13,6 +13,7 @@ import {
 } from "./highlight";
 import { initDepthNavigation, clearDepthNavigation } from "./depth";
 import { updateTableControls, hideTableControls } from "./table-controls";
+import { open as openAssetPicker, close as closeAssetPicker, isAssetPickerOpen } from "./asset-picker";
 
 let selectedElement: Element | null = null;
 let selectMode = true;
@@ -468,8 +469,12 @@ function init() {
           }
         }
 
-        // ESC to deselect
+        // ESC — close asset picker first, then deselect
         if (eventName === "keydown" && (e as KeyboardEvent).key === "Escape") {
+          if (isAssetPickerOpen()) {
+            closeAssetPicker();
+            return;
+          }
           if (selectedElement) {
             selectedElement = null;
             hideSelection();
@@ -478,6 +483,12 @@ function init() {
             clearDepthNavigation();
             send({ type: "deselect" });
           }
+          return;
+        }
+
+        // "a" to open asset picker (not during editing)
+        if (eventName === "keydown" && (e as KeyboardEvent).key === "a" && !isEditing()) {
+          openAssetPicker();
           return;
         }
 

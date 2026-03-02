@@ -21,7 +21,11 @@ A local dev server with a browser overlay and MCP interface for iterating on UIs
 - **Serve HTML files** with live reload (DOM morphing, no flickering)
 - **Select elements in the browser** — hover highlighting, click selection, scroll wheel for depth navigation (parent/child)
 - **Expose an MCP interface** for the agent — read, write, highlight, navigate
+- **Inline editing** — double-click to edit text, Tab/Shift+Tab to navigate between table cells
+- **Table controls** — floating toolbar (+Row, −Row, +Col, −Col) when table elements are selected
+- **Content shortcuts** — type `[]` or `[x]` in a cell to insert a checkbox
 - **Paste images** — Ctrl+V with selection inserts instantly; without selection, stages the image for agent-driven placement
+- **Asset picker** — press `a` to browse and reuse previously pasted images from the assets folder
 - **Screenshots** — the agent can capture full-page or element-level screenshots via `get_screenshot()`, saved to `.aceto/screenshots/`
 
 ## What Aceto Does Not Do
@@ -29,6 +33,20 @@ A local dev server with a browser overlay and MCP interface for iterating on UIs
 - No editor — you don't edit anything yourself, you steer the agent
 - No build system — an HTML file you can read with `cat`
 - No framework — Tailwind v4 via CDN, optionally DaisyUI/Flowbite
+
+## Keyboard Shortcuts (Select Mode)
+
+| Key | Action |
+|-----|--------|
+| Click | Select element |
+| Double-click | Inline edit text |
+| Scroll wheel | Navigate depth (parent/child) |
+| Tab / Shift+Tab | Next/previous cell (during table editing) |
+| `a` | Open asset picker |
+| Del | Delete selected element |
+| Esc | Close modal / deselect |
+| Alt | Toggle select/preview mode |
+| Ctrl+V | Paste image |
 
 ## Bidirectional Communication
 
