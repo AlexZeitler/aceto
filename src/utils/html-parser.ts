@@ -2,6 +2,7 @@ import { parse } from "parse5";
 import { selectOne, selectAll } from "css-select";
 import { parse5Adapter } from "./parse5-adapter";
 import type { DefaultTreeAdapterMap } from "parse5";
+import { getAvailableLibraries, getLibrary } from "../libraries";
 
 type Node = DefaultTreeAdapterMap["node"];
 type Element = DefaultTreeAdapterMap["element"];
@@ -385,6 +386,17 @@ export function extractElementWithContext(
   }
 
   return result.trimEnd();
+}
+
+export function detectLibraries(html: string): string[] {
+  const detected: string[] = [];
+  for (const name of getAvailableLibraries()) {
+    const lib = getLibrary(name);
+    if (!lib) continue;
+    const hasAny = lib.cdnLinks.some((link) => headContainsUrl(html, link.url));
+    if (hasAny) detected.push(name);
+  }
+  return detected;
 }
 
 export function headContainsUrl(html: string, url: string): boolean {

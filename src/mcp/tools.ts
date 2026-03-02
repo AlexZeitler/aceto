@@ -1,10 +1,13 @@
 import { z } from "zod";
 import { existsSync, readFileSync } from "fs";
+import { readFile } from "fs/promises";
 import path from "path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { AppState } from "../state";
 import { ACETO_MD_TEMPLATE } from "../cli";
 import * as htmlOps from "./html-ops";
+import { detectLibraries } from "../utils/html-parser";
+import { getLibrary } from "../libraries";
 
 function toolResult(result: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
@@ -32,13 +35,37 @@ export function registerTools(server: McpServer, state: AppState) {
     {},
     async () => {
       const acetoMdPath = path.join(state.projectDir, "aceto.md");
+      let source = "default";
+      let instructions = ACETO_MD_TEMPLATE;
+
       if (existsSync(acetoMdPath)) {
         const content = readFileSync(acetoMdPath, "utf-8").trim();
         if (content) {
-          return toolResult({ source: "aceto.md", instructions: content });
+          source = "aceto.md";
+          instructions = content;
         }
       }
-      return toolResult({ source: "default", instructions: ACETO_MD_TEMPLATE });
+
+      // Detect libraries in the current page and append their instructions
+      let libraries: string[] = [];
+      try {
+        let pagePath = state.currentPage;
+        if (pagePath === "/") pagePath = "/index.html";
+        else if (!pagePath.endsWith(".html")) pagePath += ".html";
+        const filePath = path.join(state.projectDir, pagePath);
+        const html = await readFile(filePath, "utf-8");
+        libraries = detectLibraries(html);
+        for (const libName of libraries) {
+          const lib = getLibrary(libName);
+          if (lib) {
+            instructions += "\n\n" + lib.instructions;
+          }
+        }
+      } catch {
+        // File not readable — skip library detection
+      }
+
+      return toolResult({ source, instructions, libraries });
     },
   );
 

@@ -171,7 +171,7 @@ async function eject() {
   log("Wrote default instructions to aceto.md");
 }
 
-async function init(twDebug: string | null) {
+async function init(twDebug: string | null, preset?: string) {
   const htmlPath = `${process.cwd()}/index.html`;
   const htmlExists = await Bun.file(htmlPath).exists();
   if (htmlExists) {
@@ -203,9 +203,21 @@ async function init(twDebug: string | null) {
     await writeConfig(process.cwd(), { twDebug });
     log(`Created .aceto/config.json (twDebug: "${twDebug}")`);
   }
+
+  if (preset) {
+    await addLibraryToFile(htmlPath, preset);
+  }
 }
 
-async function dev(port: number, twDebugFlag: string | null) {
+function fileToUrlPath(file: string): string {
+  // "about.html" → "/about", "dashboard/settings.html" → "/dashboard/settings"
+  let p = file.replace(/\.html$/, "");
+  if (p === "index") return "/";
+  if (p.endsWith("/index")) p = p.slice(0, -6);
+  return "/" + p;
+}
+
+async function dev(port: number, twDebugFlag: string | null, startFile?: string) {
   log(`Starting dev server on port ${port}...`);
 
   const { buildOverlay } = await import("./server/inject");
@@ -220,12 +232,24 @@ async function dev(port: number, twDebugFlag: string | null) {
   const config = await readConfig(process.cwd());
   const twDebug = twDebugFlag ?? config.twDebug ?? "bl";
 
+  // Resolve start page
+  let startPage = "/";
+  if (startFile) {
+    const normalized = startFile.endsWith(".html") ? startFile : startFile + ".html";
+    const fullPath = `${process.cwd()}/${normalized}`;
+    if (!(await Bun.file(fullPath).exists())) {
+      throw new Error(`${normalized} not found`);
+    }
+    startPage = fileToUrlPath(normalized);
+  }
+
   const state = createState({
     projectDir: process.cwd(),
     port,
     twDebug,
   });
 
+  state.currentPage = startPage;
   state.nextMid = scanDataMids(state.projectDir);
 
   await buildOverlay();
@@ -237,10 +261,11 @@ async function dev(port: number, twDebugFlag: string | null) {
   startFileWatcher(state);
 
   const files = await listHtmlFiles(state.projectDir);
+  const previewPath = startPage === "/" ? "" : startPage;
   log("");
   log("  \u{1F9EA} Aceto Dev Server");
   log("");
-  log(`  Preview:  http://localhost:${port}`);
+  log(`  Preview:  http://localhost:${port}${previewPath}`);
   log(`  MCP:      http://localhost:${port}/mcp`);
   log(`  Pages:    ${files.length} (${files.join(", ")})`);
   if (twDebug) {
@@ -259,6 +284,48 @@ async function listHtmlFiles(dir: string): Promise<string[]> {
   return files.sort();
 }
 
+async function addLibraryToFile(filePath: string, libraryName: string) {
+  const { getLibrary, getAvailableLibraries } = await import("./libraries");
+  const { headContainsUrl, insertIntoHead } = await import("./utils/html-parser");
+
+  const lib = getLibrary(libraryName);
+  if (!lib) {
+    const available = getAvailableLibraries();
+    throw new Error(
+      `Unknown library "${libraryName}". Available: ${available.join(", ")}`,
+    );
+  }
+
+  const file = Bun.file(filePath);
+  if (!(await file.exists())) {
+    throw new Error(`${filePath} not found. Run "aceto init" first.`);
+  }
+
+  let html = await file.text();
+  const added: string[] = [];
+
+  for (const link of lib.cdnLinks) {
+    if (headContainsUrl(html, link.url)) continue;
+    const tag =
+      link.type === "css"
+        ? `<link href="${link.url}" rel="stylesheet" type="text/css">`
+        : `<script src="${link.url}"></script>`;
+    html = insertIntoHead(html, tag);
+    added.push(link.url);
+  }
+
+  if (added.length === 0) {
+    log(`${lib.displayName} is already included in ${filePath}`);
+    return;
+  }
+
+  await Bun.write(filePath, html);
+  log(`Added ${lib.displayName} to ${filePath}`);
+  for (const url of added) {
+    log(`  - ${url}`);
+  }
+}
+
 async function main() {
   const { command, flags } = parseArgs();
 
@@ -268,14 +335,70 @@ async function main() {
       if (flags.eject === "true" || "eject" in flags) {
         await eject();
       } else {
-        await init(twDebug);
+        const preset = flags.preset && flags.preset !== "true" ? flags.preset : undefined;
+        await init(twDebug, preset);
       }
       break;
     }
     case "dev": {
       const port = flags.port ? parseInt(flags.port, 10) : 3000;
       const twDebug = parseTwDebugFlag(flags);
-      await dev(port, twDebug);
+      // Optional positional arg: aceto dev about.html
+      const devArgs = Bun.argv.slice(3);
+      const startFile = devArgs.find((a) => !a.startsWith("-"));
+      await dev(port, twDebug, startFile);
+      break;
+    }
+    case "new": {
+      const newArgs = Bun.argv.slice(3);
+      const pagePath = newArgs[0];
+      if (!pagePath) {
+        log("Usage: aceto new <path> [-l <library>]");
+        log("Example: aceto new about");
+        log("         aceto new dashboard/settings -l daisyui");
+        process.exit(1);
+      }
+
+      // Parse -l / --library flag
+      let library: string | undefined;
+      for (let i = 1; i < newArgs.length; i++) {
+        if (newArgs[i] === "-l" || newArgs[i] === "--library") {
+          library = newArgs[i + 1];
+          break;
+        }
+      }
+
+      // Normalize path: "about" -> "about.html", "dashboard/settings" -> "dashboard/settings.html"
+      let normalized = pagePath;
+      if (!normalized.endsWith(".html")) normalized += ".html";
+      const filePath = `${process.cwd()}/${normalized}`;
+
+      if (await Bun.file(filePath).exists()) {
+        throw new Error(`${normalized} already exists`);
+      }
+
+      // Create directories if needed
+      const dir = require("path").dirname(filePath);
+      require("fs").mkdirSync(dir, { recursive: true });
+
+      let html = INIT_HTML;
+      await Bun.write(filePath, html);
+      log(`Created ${normalized}`);
+
+      if (library) {
+        await addLibraryToFile(filePath, library);
+      }
+      break;
+    }
+    case "add": {
+      const libName = Bun.argv[3];
+      if (!libName) {
+        log("Usage: aceto add <library>");
+        log("Available: daisyui");
+        process.exit(1);
+      }
+      const htmlPath = `${process.cwd()}/index.html`;
+      await addLibraryToFile(htmlPath, libName);
       break;
     }
     case "export": {
@@ -293,13 +416,17 @@ async function main() {
       log("Commands:");
       log("  init                  Create a new project (index.html + CLAUDE.md + aceto.md)");
       log("  init --eject          Write default instructions into aceto.md");
-      log("  dev                   Start dev server + MCP server");
+      log("  dev [file]            Start dev server + MCP server (optional start page)");
+      log("  new <path>            Create a new HTML page (e.g. about, dashboard/settings)");
+      log("  add <library>         Add a library (e.g. daisyui)");
       log("  export                Export HTML with cleanup to dist/");
       log("  export --production   Export with Tailwind CSS build");
       log("");
       log("Options:");
       log("  --port      Dev server port (default: 3000)");
       log("  --tw-debug  Show Tailwind breakpoint indicator (tl|bl|tr|br, default: bl)");
+      log("  --preset    Library preset for init (e.g. daisyui)");
+      log("  -l          Library to include in new page (e.g. -l daisyui)");
       process.exit(1);
   }
 }
