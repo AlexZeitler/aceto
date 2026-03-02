@@ -14,6 +14,12 @@ function toolError(e: any) {
   };
 }
 
+function resolveSelector(state: AppState, selector?: string): string {
+  if (selector) return selector;
+  if (state.currentSelection) return state.currentSelection.selector;
+  throw new Error("No selector provided and no element selected in the browser");
+}
+
 export function registerTools(server: McpServer, state: AppState) {
   // --- Read Tools ---
 
@@ -126,14 +132,14 @@ export function registerTools(server: McpServer, state: AppState) {
 
   server.tool(
     "replace_element",
-    "Replaces a specific element identified by CSS selector with new HTML.",
+    "Replaces a specific element identified by CSS selector with new HTML. If no selector is provided, uses the currently selected element.",
     {
-      selector: z.string().describe("CSS selector of the element to replace"),
+      selector: z.string().optional().describe("CSS selector of the element to replace. If omitted, uses the current browser selection."),
       html: z.string().describe("New HTML to replace the element with"),
     },
     async ({ selector, html }) => {
       try {
-        return toolResult(await htmlOps.replaceElement(state, selector, html));
+        return toolResult(await htmlOps.replaceElement(state, resolveSelector(state, selector), html));
       } catch (e: any) {
         return toolError(e);
       }
@@ -142,16 +148,16 @@ export function registerTools(server: McpServer, state: AppState) {
 
   server.tool(
     "update_classes",
-    "Add or remove Tailwind/CSS classes on an element without replacing its HTML.",
+    "Add or remove Tailwind/CSS classes on an element without replacing its HTML. If no selector is provided, uses the currently selected element.",
     {
-      selector: z.string().describe("CSS selector of the element"),
+      selector: z.string().optional().describe("CSS selector of the element. If omitted, uses the current browser selection."),
       add: z.array(z.string()).optional().describe("Classes to add"),
       remove: z.array(z.string()).optional().describe("Classes to remove"),
     },
     async ({ selector, add, remove }) => {
       try {
         return toolResult(
-          await htmlOps.updateClasses(state, selector, add ?? [], remove ?? []),
+          await htmlOps.updateClasses(state, resolveSelector(state, selector), add ?? [], remove ?? []),
         );
       } catch (e: any) {
         return toolError(e);
@@ -161,9 +167,9 @@ export function registerTools(server: McpServer, state: AppState) {
 
   server.tool(
     "insert_element",
-    "Insert a new HTML element relative to an existing element identified by CSS selector.",
+    "Insert a new HTML element relative to an existing element identified by CSS selector. If no selector is provided, uses the currently selected element.",
     {
-      selector: z.string().describe("CSS selector of the reference element"),
+      selector: z.string().optional().describe("CSS selector of the reference element. If omitted, uses the current browser selection."),
       position: z
         .enum(["before", "after", "prepend", "append"])
         .describe("Where to insert: before/after the element, or prepend/append inside it"),
@@ -172,7 +178,7 @@ export function registerTools(server: McpServer, state: AppState) {
     async ({ selector, position, html }) => {
       try {
         return toolResult(
-          await htmlOps.insertElement(state, selector, position, html),
+          await htmlOps.insertElement(state, resolveSelector(state, selector), position, html),
         );
       } catch (e: any) {
         return toolError(e);
@@ -182,13 +188,13 @@ export function registerTools(server: McpServer, state: AppState) {
 
   server.tool(
     "delete_element",
-    "Remove an element identified by CSS selector from the page.",
+    "Remove an element from the page. If no selector is provided, deletes the currently selected element.",
     {
-      selector: z.string().describe("CSS selector of the element to delete"),
+      selector: z.string().optional().describe("CSS selector of the element to delete. If omitted, uses the current browser selection."),
     },
     async ({ selector }) => {
       try {
-        return toolResult(await htmlOps.deleteElement(state, selector));
+        return toolResult(await htmlOps.deleteElement(state, resolveSelector(state, selector)));
       } catch (e: any) {
         return toolError(e);
       }
@@ -197,14 +203,14 @@ export function registerTools(server: McpServer, state: AppState) {
 
   server.tool(
     "update_text",
-    "Update the text content of an element without changing its structure or attributes.",
+    "Update the text content of an element without changing its structure or attributes. If no selector is provided, uses the currently selected element.",
     {
-      selector: z.string().describe("CSS selector of the element"),
+      selector: z.string().optional().describe("CSS selector of the element. If omitted, uses the current browser selection."),
       text: z.string().describe("New text content"),
     },
     async ({ selector, text }) => {
       try {
-        return toolResult(await htmlOps.updateText(state, selector, text));
+        return toolResult(await htmlOps.updateText(state, resolveSelector(state, selector), text));
       } catch (e: any) {
         return toolError(e);
       }
@@ -213,16 +219,16 @@ export function registerTools(server: McpServer, state: AppState) {
 
   server.tool(
     "update_attribute",
-    "Set or update an HTML attribute on an element (e.g. src, href, alt).",
+    "Set or update an HTML attribute on an element (e.g. src, href, alt). If no selector is provided, uses the currently selected element.",
     {
-      selector: z.string().describe("CSS selector of the element"),
+      selector: z.string().optional().describe("CSS selector of the element. If omitted, uses the current browser selection."),
       attr: z.string().describe("Attribute name"),
       value: z.string().describe("Attribute value"),
     },
     async ({ selector, attr, value }) => {
       try {
         return toolResult(
-          await htmlOps.updateAttribute(state, selector, attr, value),
+          await htmlOps.updateAttribute(state, resolveSelector(state, selector), attr, value),
         );
       } catch (e: any) {
         return toolError(e);

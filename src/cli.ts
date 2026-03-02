@@ -70,6 +70,7 @@ Aceto is an AI-powered mockup tool — a local dev server with a browser overlay
 
 ## Best Practices
 
+- **All write tools have an optional selector.** If the user has selected an element, you can omit the selector — the tool will use the current selection automatically. This saves a \`get_selected_element()\` roundtrip.
 - Assign semantic IDs to important elements (\`#hero\`, \`#pricing\`, \`#nav-main\`)
 - Use Tailwind classes for styling
 - Make small, incremental changes instead of regenerating the entire page

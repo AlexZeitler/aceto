@@ -10,11 +10,18 @@ A local dev server with a browser overlay and MCP interface for iterating on UIs
 4. **Point at an element** and say "change this"
 5. The agent understands which element you mean and modifies it
 
+## Why Aceto
+
+- **Token-efficient:** The agent doesn't need to read and parse the full HTML to understand what you mean. You point at an element in the browser, the agent gets a precise selector. Write tools use the current selection by default — one tool call, no roundtrip.
+- **Real HTML:** No abstraction layer, no component model. The output is a plain HTML file you can read with `cat` and send by email.
+- **Live feedback loop:** DOM morphing keeps scroll position and selection state. You see changes instantly without page reload flicker.
+
 ## What Aceto Does
 
 - **Serve HTML files** with live reload (DOM morphing, no flickering)
 - **Select elements in the browser** — hover highlighting, click selection, scroll wheel for depth navigation (parent/child)
 - **Expose an MCP interface** for the agent — read, write, highlight, navigate
+- **Paste images** — Ctrl+V with selection inserts instantly; without selection, stages the image for agent-driven placement
 
 ## What Aceto Does Not Do
 
