@@ -2,6 +2,7 @@ let shadowRoot: ShadowRoot | null = null;
 let hoverOverlay: HTMLElement | null = null;
 let hoverLabel: HTMLElement | null = null;
 let selectionOverlay: HTMLElement | null = null;
+let selectionOverlayPool: HTMLElement[] = [];
 let breadcrumbBar: HTMLElement | null = null;
 let breadcrumbUserSpan: HTMLElement | null = null;
 let breadcrumbAgentSpan: HTMLElement | null = null;
@@ -565,6 +566,34 @@ export function updateSelection(el: Element | null) {
 
 export function hideSelection() {
   if (selectionOverlay) selectionOverlay.style.display = "none";
+  for (const o of selectionOverlayPool) o.remove();
+  selectionOverlayPool = [];
+}
+
+export function showMultiSelection(elements: Element[]) {
+  if (!shadowRoot) return;
+  // Hide single overlay
+  if (selectionOverlay) selectionOverlay.style.display = "none";
+  // Remove old pool overlays
+  for (const o of selectionOverlayPool) o.remove();
+  selectionOverlayPool = [];
+  // Create one overlay per element
+  for (const el of elements) {
+    const overlay = document.createElement("div");
+    overlay.className = "aceto-overlay aceto-selection";
+    const rect = el.getBoundingClientRect();
+    positionOverlay(overlay, rect);
+    shadowRoot.insertBefore(overlay, selectionOverlay?.nextSibling || null);
+    selectionOverlayPool.push(overlay);
+  }
+}
+
+export function repositionMultiSelection(elements: Element[]) {
+  if (selectionOverlayPool.length !== elements.length) return;
+  for (let i = 0; i < elements.length; i++) {
+    const rect = elements[i].getBoundingClientRect();
+    positionOverlay(selectionOverlayPool[i], rect);
+  }
 }
 
 // --- Agent Highlights ---

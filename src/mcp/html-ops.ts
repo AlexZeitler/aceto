@@ -65,6 +65,19 @@ export async function getCurrentPage(state: AppState) {
 }
 
 export function getSelectedElement(state: AppState) {
+  // Multi-select: return all elements with full data
+  if (state.multiSelection.length > 1) {
+    const base = {
+      selected: true as const,
+      multi: true as const,
+      elements: state.multiSelection,
+    };
+    return state.lastPastedImage
+      ? { ...base, lastPastedImage: state.lastPastedImage }
+      : base;
+  }
+
+  // Single or no selection
   const base = !state.currentSelection
     ? { selected: false as const }
     : { selected: true as const, ...state.currentSelection };

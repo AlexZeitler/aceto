@@ -5,6 +5,8 @@ import {
   hideHover,
   showSelection,
   hideSelection,
+  showMultiSelection,
+  repositionMultiSelection,
   setUserSelector,
   getModeToggleButton,
   getUndoButton,
@@ -15,10 +17,14 @@ import { initDepthNavigation, clearDepthNavigation } from "./depth";
 import { updateTableControls, hideTableControls } from "./table-controls";
 import { open as openAssetPicker, close as closeAssetPicker, isAssetPickerOpen } from "./asset-picker";
 
-let selectedElement: Element | null = null;
+let selectedElements: Element[] = [];
 let selectMode = true;
 let editingElement: HTMLElement | null = null;
 let editOriginalText: string = "";
+
+function getSelectedElement(): Element | null {
+  return selectedElements[selectedElements.length - 1] ?? null;
+}
 
 export function toggleSelectMode() {
   selectMode = !selectMode;
@@ -129,45 +135,67 @@ function getElementMeta(el: Element) {
   };
 }
 
-function selectElement(el: Element) {
-  selectedElement = el;
-  showSelection(el);
-  hideHover();
-
+function buildSelectPayload(el: Element) {
   const result = generateSelector(el);
   const meta = getElementMeta(el);
-
-  setUserSelector(result.selector);
-  updateTableControls(el);
-
-  send({
-    type: "select",
+  return {
     selector: result.selector,
     html: el.outerHTML,
     meta,
     ...(result.dataMid ? { dataMid: result.dataMid, fallbackSelector: result.fallbackSelector } : {}),
-  });
+  };
 }
 
-export function getSelectedElement(): Element | null {
-  return selectedElement;
+function sendSelection() {
+  if (selectedElements.length === 0) {
+    hideSelection();
+    hideTableControls();
+    setUserSelector("");
+    send({ type: "deselect" });
+    return;
+  }
+
+  if (selectedElements.length === 1) {
+    const el = selectedElements[0];
+    showSelection(el);
+    const payload = buildSelectPayload(el);
+    setUserSelector(payload.selector);
+    updateTableControls(el);
+    send({ type: "select", ...payload });
+  } else {
+    showMultiSelection(selectedElements);
+    hideTableControls();
+    const elements = selectedElements.map((el) => buildSelectPayload(el));
+    setUserSelector(`${elements.length} elements`);
+    send({ type: "multi_select", elements });
+  }
 }
+
+function selectElement(el: Element) {
+  selectedElements = [el];
+  hideHover();
+  sendSelection();
+}
+
+function toggleMultiSelect(el: Element) {
+  const idx = selectedElements.indexOf(el);
+  if (idx >= 0) {
+    selectedElements.splice(idx, 1);
+  } else {
+    selectedElements.push(el);
+  }
+  hideHover();
+  sendSelection();
+}
+
+export { getSelectedElement };
 
 export function setSelectedElement(el: Element | null) {
-  selectedElement = el;
   if (el) {
-    showSelection(el);
-    updateTableControls(el);
-    const result = generateSelector(el);
-    const meta = getElementMeta(el);
-    send({
-      type: "select",
-      selector: result.selector,
-      html: el.outerHTML,
-      meta,
-      ...(result.dataMid ? { dataMid: result.dataMid, fallbackSelector: result.fallbackSelector } : {}),
-    });
+    selectedElements = [el];
+    sendSelection();
   } else {
+    selectedElements = [];
     hideSelection();
     hideTableControls();
   }
@@ -347,7 +375,8 @@ function handleClipboardPaste() {
     if (!blob) { cleanup(); return; }
 
     const port = (window as any).__ACETO_WS_PORT__ || 3000;
-    const selector = selectedElement ? generateSelector(selectedElement).selector : "";
+    const sel = getSelectedElement();
+    const selector = sel ? generateSelector(sel).selector : "";
 
     const formData = new FormData();
     formData.append("image", blob);
@@ -475,8 +504,8 @@ function init() {
             closeAssetPicker();
             return;
           }
-          if (selectedElement) {
-            selectedElement = null;
+          if (selectedElements.length > 0) {
+            selectedElements = [];
             hideSelection();
             hideTableControls();
             setUserSelector("");
@@ -499,12 +528,15 @@ function init() {
           return;
         }
 
-        // DEL to delete selected element
+        // DEL to delete selected element(s)
         if (eventName === "keydown" && (e as KeyboardEvent).key === "Delete") {
-          if (selectedElement) {
-            const result = generateSelector(selectedElement);
-            send({ type: "delete_element", selector: result.selector });
-            selectedElement = null;
+          if (selectedElements.length > 0) {
+            // Send selectors in reverse order for stable offsets
+            const selectors = selectedElements.map((el) => generateSelector(el).selector).reverse();
+            for (const sel of selectors) {
+              send({ type: "delete_element", selector: sel });
+            }
+            selectedElements = [];
             hideSelection();
             setUserSelector("");
             clearDepthNavigation();
@@ -516,13 +548,15 @@ function init() {
         e.stopPropagation();
 
         if (eventName === "click" && e.target instanceof Element) {
+          const me = e as MouseEvent;
           // Find deepest element at click point
-          const target = document.elementFromPoint(
-            (e as MouseEvent).clientX,
-            (e as MouseEvent).clientY,
-          );
+          const target = document.elementFromPoint(me.clientX, me.clientY);
           if (target && !isOverlayElement(target)) {
-            selectElement(target);
+            if (me.ctrlKey || me.metaKey) {
+              toggleMultiSelect(target);
+            } else {
+              selectElement(target);
+            }
             initDepthNavigation(target);
           }
         }
@@ -593,8 +627,11 @@ function init() {
 
   // Re-position selection overlay on scroll
   document.addEventListener("scroll", () => {
-    if (selectedElement && document.contains(selectedElement)) {
-      showSelection(selectedElement);
+    const valid = selectedElements.filter((el) => document.contains(el));
+    if (valid.length === 1) {
+      showSelection(valid[0]);
+    } else if (valid.length > 1) {
+      repositionMultiSelection(valid);
     }
   }, { capture: true, passive: true });
 

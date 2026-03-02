@@ -64,6 +64,7 @@ export interface AppState {
   port: number;
   currentPage: string;
   currentSelection: SelectionData | null;
+  multiSelection: SelectionData[];
   wsClients: Set<ServerWebSocket<unknown>>;
   fileHistories: Map<string, FileHistory>;
   selectionHistory: SelectionHistoryEntry[];
@@ -112,6 +113,7 @@ export function createState(opts: {
     port: opts.port,
     currentPage: "/",
     currentSelection: null,
+    multiSelection: [],
     wsClients: new Set(),
     fileHistories: new Map(),
     selectionHistory: [],

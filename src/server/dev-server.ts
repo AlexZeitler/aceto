@@ -94,6 +94,19 @@ interface WsSelectMessage {
   };
 }
 
+interface WsMultiSelectElement {
+  selector: string;
+  html: string;
+  dataMid?: string;
+  fallbackSelector?: string;
+  meta: WsSelectMessage["meta"];
+}
+
+interface WsMultiSelectMessage {
+  type: "multi_select";
+  elements: WsMultiSelectElement[];
+}
+
 interface WsNavigateMessage {
   type: "navigate";
   path: string;
@@ -147,7 +160,7 @@ interface WsPickAssetMessage {
   path: string;
 }
 
-type WsMessage = WsSelectMessage | WsNavigateMessage | WsReadyMessage | WsDeselectMessage | WsTextEditMessage | WsUndoRedoMessage | WsDeleteElementMessage | WsTableOpMessage | WsShortcutExpandMessage | WsListAssetsMessage | WsPickAssetMessage;
+type WsMessage = WsSelectMessage | WsMultiSelectMessage | WsNavigateMessage | WsReadyMessage | WsDeselectMessage | WsTextEditMessage | WsUndoRedoMessage | WsDeleteElementMessage | WsTableOpMessage | WsShortcutExpandMessage | WsListAssetsMessage | WsPickAssetMessage;
 
 function handleWsMessage(
   state: AppState,
@@ -189,12 +202,46 @@ function handleWsMessage(
         timestamp: Date.now(),
       };
       state.currentSelection = selection;
+      state.multiSelection = [];
       pushSelectionHistory(state, selection);
       log(`Selection: ${data.selector}`);
       break;
     }
+    case "multi_select": {
+      state.activeClient = ws;
+
+      const selections: SelectionData[] = [];
+      for (const elem of data.elements) {
+        if (elem.dataMid) {
+          const num = parseInt(elem.dataMid.slice(1), 10);
+          if (num >= state.nextMid) state.nextMid = num + 1;
+        }
+        if (elem.dataMid && elem.fallbackSelector) {
+          persistDataMid(state, elem.fallbackSelector, elem.dataMid);
+        }
+
+        selections.push({
+          selector: elem.selector,
+          html: elem.html,
+          tag: elem.meta.tag,
+          classes: elem.meta.classes,
+          text: elem.meta.text,
+          parentSelector: elem.meta.parentSelector,
+          siblings: elem.meta.siblings,
+          dimensions: elem.meta.dimensions,
+          page: state.currentPage,
+          timestamp: Date.now(),
+        });
+      }
+
+      state.multiSelection = selections;
+      state.currentSelection = selections[selections.length - 1] ?? null;
+      log(`Multi-select: ${selections.length} elements`);
+      break;
+    }
     case "deselect":
       state.currentSelection = null;
+      state.multiSelection = [];
       log("Deselected");
       break;
     case "ready":
