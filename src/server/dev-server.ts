@@ -282,13 +282,13 @@ function handleWsMessage(
     case "undo": {
       undo(state).then((result) => {
         log(result.success ? "Undo" : `Undo failed: ${result.reason}`);
-      });
+      }).catch((e: any) => log(`Undo error: ${e.message}`));
       break;
     }
     case "redo": {
       redo(state).then((result) => {
         log(result.success ? "Redo" : `Redo failed: ${result.reason}`);
-      });
+      }).catch((e: any) => log(`Redo error: ${e.message}`));
       break;
     }
     case "delete_element": {

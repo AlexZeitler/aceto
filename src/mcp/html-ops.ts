@@ -35,6 +35,7 @@ async function writeWithHistory(
 ) {
   const history = getFileHistory(state, filePath);
   history.pushEdit(oldHtml, newHtml);
+  state.recentServerWrites.add(filePath);
   await writeFile(filePath, newHtml, "utf-8");
 }
 
@@ -267,6 +268,7 @@ export async function undo(state: AppState) {
   const history = getFileHistory(state, filePath);
   const content = history.undo();
   if (!content) return { success: false, reason: "Nothing to undo" };
+  state.recentServerWrites.add(filePath);
   await writeFile(filePath, content, "utf-8");
   broadcastUpdate(state, content);
   return { success: true };
@@ -277,6 +279,7 @@ export async function redo(state: AppState) {
   const history = getFileHistory(state, filePath);
   const content = history.redo();
   if (!content) return { success: false, reason: "Nothing to redo" };
+  state.recentServerWrites.add(filePath);
   await writeFile(filePath, content, "utf-8");
   broadcastUpdate(state, content);
   return { success: true };
