@@ -344,8 +344,21 @@ async function main() {
       const port = flags.port ? parseInt(flags.port, 10) : 3000;
       const twDebug = parseTwDebugFlag(flags);
       // Optional positional arg: aceto dev about.html
+      // Skip values that belong to --flag options
       const devArgs = Bun.argv.slice(3);
-      const startFile = devArgs.find((a) => !a.startsWith("-"));
+      let startFile: string | undefined;
+      for (let i = 0; i < devArgs.length; i++) {
+        if (devArgs[i].startsWith("--")) {
+          // Skip --flag and its value (if not another flag)
+          const next = devArgs[i + 1];
+          if (next && !next.startsWith("--")) i++;
+          continue;
+        }
+        if (!devArgs[i].startsWith("-")) {
+          startFile = devArgs[i];
+          break;
+        }
+      }
       await dev(port, twDebug, startFile);
       break;
     }
