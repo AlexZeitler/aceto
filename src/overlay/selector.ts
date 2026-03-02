@@ -569,31 +569,34 @@ function init() {
           return;
         }
 
+        // Single-key shortcuts: ignore when any modifier is held (Ctrl+C, Ctrl+R, etc.)
+        const hasModifier = eventName === "keydown" && ((e as KeyboardEvent).ctrlKey || (e as KeyboardEvent).metaKey || (e as KeyboardEvent).altKey);
+
         // "a" to open asset picker (not during editing)
-        if (eventName === "keydown" && (e as KeyboardEvent).key === "a" && !isEditing() && !isClassEditing()) {
+        if (eventName === "keydown" && !hasModifier && (e as KeyboardEvent).key === "a" && !isEditing() && !isClassEditing()) {
           openAssetPicker();
           return;
         }
 
         // "e" to toggle select/preview mode (not during editing)
-        if (eventName === "keydown" && (e as KeyboardEvent).key === "e" && !isEditing() && !isClassEditing()) {
+        if (eventName === "keydown" && !hasModifier && (e as KeyboardEvent).key === "e" && !isEditing() && !isClassEditing()) {
           e.stopPropagation();
           toggleSelectMode();
           return;
         }
 
         // "u" for undo, "r" for redo
-        if (eventName === "keydown" && (e as KeyboardEvent).key === "u" && !isEditing() && !isClassEditing()) {
+        if (eventName === "keydown" && !hasModifier && (e as KeyboardEvent).key === "u" && !isEditing() && !isClassEditing()) {
           send({ type: "undo" });
           return;
         }
-        if (eventName === "keydown" && (e as KeyboardEvent).key === "r" && !isEditing() && !isClassEditing()) {
+        if (eventName === "keydown" && !hasModifier && (e as KeyboardEvent).key === "r" && !isEditing() && !isClassEditing()) {
           send({ type: "redo" });
           return;
         }
 
         // "c" to open class editor on selected element
-        if (eventName === "keydown" && (e as KeyboardEvent).key === "c" && !isEditing() && !isClassEditing()) {
+        if (eventName === "keydown" && !hasModifier && (e as KeyboardEvent).key === "c" && !isEditing() && !isClassEditing()) {
           e.preventDefault();
           e.stopPropagation();
           const sel = getSelectedElement();
