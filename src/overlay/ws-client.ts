@@ -119,7 +119,10 @@ on("mid_counter", (data) => {
 
 // Config from server (sent on connect)
 let configReceived = false;
+let elementDefaults: Record<string, string> = {};
+
 on("config", (data) => {
+  if (data.defaults) elementDefaults = data.defaults;
   if (configReceived) return;
   configReceived = true;
   if (data.twDebug) {
@@ -127,6 +130,10 @@ on("config", (data) => {
     initDebugScreens(shadowRoot, data.twDebug);
   }
 });
+
+export function getDefaults(): Record<string, string> {
+  return elementDefaults;
+}
 
 export function getNextMid(): string {
   const mid = `m${midCounter}`;

@@ -1,4 +1,4 @@
-import { send, getNextMid } from "./ws-client";
+import { send, getNextMid, getDefaults } from "./ws-client";
 import {
   initHighlightHost,
   showHover,
@@ -249,8 +249,10 @@ function findAdjacentCell(
 
 function expandShortcuts(text: string): string | null {
   const trimmed = text.trim();
-  if (trimmed === "[]") return '<input type="checkbox">';
-  if (trimmed === "[x]") return '<input type="checkbox" checked>';
+  const defaults = getDefaults();
+  const cls = defaults.checkbox ? ` class="${defaults.checkbox}"` : "";
+  if (trimmed === "[]") return `<input type="checkbox"${cls}>`;
+  if (trimmed === "[x]") return `<input type="checkbox" checked${cls}>`;
   return null;
 }
 

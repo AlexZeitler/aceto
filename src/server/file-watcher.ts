@@ -4,6 +4,7 @@ import path from "path";
 import type { AppState } from "../state";
 import { broadcast, broadcastPageList } from "./dev-server";
 import { extractBodyContent } from "../utils/html-parser";
+import { loadDefaults } from "../utils/defaults";
 import { log } from "../utils/log";
 
 export function startFileWatcher(state: AppState) {
@@ -14,8 +15,25 @@ export function startFileWatcher(state: AppState) {
     { recursive: true },
     (event, filename) => {
       if (!filename) return;
-      if (!filename.endsWith(".html")) return;
       if (filename.includes("node_modules") || filename.startsWith(".")) return;
+
+      // Reload element defaults when config file changes
+      if (filename === "aceto.defaults.json") {
+        const existing = debounceTimers.get(filename);
+        if (existing) clearTimeout(existing);
+        debounceTimers.set(
+          filename,
+          setTimeout(() => {
+            debounceTimers.delete(filename);
+            state.elementDefaults = loadDefaults(state.projectDir);
+            broadcast(state, { type: "config", twDebug: state.twDebug, defaults: state.elementDefaults });
+            log("Reloaded element defaults");
+          }, 100),
+        );
+        return;
+      }
+
+      if (!filename.endsWith(".html")) return;
 
       const existing = debounceTimers.get(filename);
       if (existing) clearTimeout(existing);

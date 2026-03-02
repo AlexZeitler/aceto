@@ -424,7 +424,8 @@ async function handlePasteImage(state: AppState, req: Request): Promise<Response
 
     if (selector) {
       // Element selected → insert immediately after selection
-      const imgTag = `<img src="${assetPath}" alt="" class="max-w-full h-auto">`;
+      const imgClasses = state.elementDefaults.img || "max-w-full h-auto";
+      const imgTag = `<img src="${assetPath}" alt="" class="${imgClasses}">`;
       await insertElement(state, selector, "after", imgTag);
       log(`Pasted image after ${selector}: ${assetPath}`);
     } else {
@@ -494,7 +495,7 @@ export function startDevServer(state: AppState) {
       open(ws) {
         state.wsClients.add(ws);
         ws.send(JSON.stringify({ type: "mid_counter", value: state.nextMid }));
-        ws.send(JSON.stringify({ type: "config", twDebug: state.twDebug }));
+        ws.send(JSON.stringify({ type: "config", twDebug: state.twDebug, defaults: state.elementDefaults }));
         broadcastPageList(state);
         log(`Client connected (${state.wsClients.size} total)`);
       },

@@ -24,6 +24,7 @@ A local dev server with a browser overlay and MCP interface for iterating on UIs
 - **Inline editing** — double-click to edit text, Tab/Shift+Tab to navigate between table cells
 - **Table controls** — floating toolbar (+Row, −Row, +Col, −Col) when table elements are selected
 - **Content shortcuts** — type `[]` or `[x]` in a cell to insert a checkbox
+- **Element defaults** — define default classes for generated elements via `aceto.defaults.json`
 - **Paste images** — Ctrl+V with selection inserts instantly; without selection, stages the image for agent-driven placement
 - **Asset picker** — press `a` to browse and reuse previously pasted images from the assets folder
 - **Screenshots** — the agent can capture full-page or element-level screenshots via `get_screenshot()`, saved to `.aceto/screenshots/`
@@ -94,6 +95,22 @@ To customize the instructions, run `aceto init --eject` to write the defaults in
 Aceto supports adding component libraries via `aceto add <library>`. This inserts CDN links into `index.html` and automatically includes library-specific instructions when the agent calls `get_instructions()`.
 
 Currently supported: **DaisyUI v5** (`aceto add daisyui`)
+
+## Element Defaults
+
+Create an `aceto.defaults.json` in your project root to define default classes for generated elements:
+
+```json
+{
+  "checkbox": "h-4 w-4",
+  "img": "max-w-full h-auto rounded"
+}
+```
+
+- **checkbox** — applied to checkboxes created via `[]`/`[x]` shortcuts
+- **img** — applied to images inserted via paste (Ctrl+V)
+
+The file is hot-reloaded — changes take effect immediately without restarting the server.
 
 ## Screenshots
 

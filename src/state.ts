@@ -1,4 +1,6 @@
 import type { ServerWebSocket } from "bun";
+import type { ElementDefaults } from "./utils/defaults";
+import { loadDefaults } from "./utils/defaults";
 
 export interface SelectionData {
   selector: string;
@@ -73,6 +75,7 @@ export interface AppState {
   twDebug: string | null;
   lastPastedImage: string | null;
   recentServerWrites: Set<string>;
+  elementDefaults: ElementDefaults;
 }
 
 export function getNextMid(state: AppState): string {
@@ -122,5 +125,6 @@ export function createState(opts: {
     twDebug: opts.twDebug ?? null,
     lastPastedImage: null,
     recentServerWrites: new Set(),
+    elementDefaults: loadDefaults(opts.projectDir),
   };
 }
