@@ -45,6 +45,8 @@ A local dev server with a browser overlay and MCP interface for iterating on UIs
 | Scroll wheel | Navigate depth (parent/child) |
 | Tab / Shift+Tab | Next/previous cell (during table editing) |
 | `c` | Edit CSS classes of selected element |
+| `u` | Undo |
+| `r` | Redo |
 | `a` | Open asset picker |
 | Del | Delete selected element |
 | Esc | Close modal / deselect |

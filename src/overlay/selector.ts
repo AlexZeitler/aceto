@@ -582,6 +582,16 @@ function init() {
           return;
         }
 
+        // "u" for undo, "r" for redo
+        if (eventName === "keydown" && (e as KeyboardEvent).key === "u" && !isEditing() && !isClassEditing()) {
+          send({ type: "undo" });
+          return;
+        }
+        if (eventName === "keydown" && (e as KeyboardEvent).key === "r" && !isEditing() && !isClassEditing()) {
+          send({ type: "redo" });
+          return;
+        }
+
         // "c" to open class editor on selected element
         if (eventName === "keydown" && (e as KeyboardEvent).key === "c" && !isEditing() && !isClassEditing()) {
           e.preventDefault();
