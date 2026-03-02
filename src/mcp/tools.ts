@@ -1,6 +1,9 @@
 import { z } from "zod";
+import { existsSync, readFileSync } from "fs";
+import path from "path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { AppState } from "../state";
+import { ACETO_MD_TEMPLATE } from "../cli";
 import * as htmlOps from "./html-ops";
 
 function toolResult(result: unknown) {
@@ -21,6 +24,24 @@ function resolveSelector(state: AppState, selector?: string): string {
 }
 
 export function registerTools(server: McpServer, state: AppState) {
+  // --- Instructions ---
+
+  server.tool(
+    "get_instructions",
+    "Returns the agent instructions for this project. Call this first before doing any work. Returns the project's aceto.md if it exists, otherwise returns the default instructions.",
+    {},
+    async () => {
+      const acetoMdPath = path.join(state.projectDir, "aceto.md");
+      if (existsSync(acetoMdPath)) {
+        const content = readFileSync(acetoMdPath, "utf-8").trim();
+        if (content) {
+          return toolResult({ source: "aceto.md", instructions: content });
+        }
+      }
+      return toolResult({ source: "default", instructions: ACETO_MD_TEMPLATE });
+    },
+  );
+
   // --- Read Tools ---
 
   server.tool(

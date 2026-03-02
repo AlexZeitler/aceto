@@ -15,7 +15,16 @@ export const INIT_HTML = `<!DOCTYPE html>
 </html>
 `;
 
-const ACETO_MD_TEMPLATE = `# Aceto — AI Agent Instructions
+const CLAUDE_MD_TEMPLATE = `# Aceto
+
+This project uses Aceto — a local dev server with browser overlay and MCP interface for building UIs.
+
+**Before doing any work, call \`get_instructions()\` via the Aceto MCP server to get your instructions.**
+
+If the project has a customized \`aceto.md\`, it will be returned. Otherwise you'll get the default instructions.
+`;
+
+export const ACETO_MD_TEMPLATE = `# Aceto — AI Agent Instructions
 
 Aceto is an AI-powered mockup tool — a local dev server with a browser overlay and MCP interface that lets you iterate on UIs together with an AI agent.
 
@@ -29,12 +38,32 @@ Aceto is an AI-powered mockup tool — a local dev server with a browser overlay
 
 ## Workflow
 
-1. Ask the user what they want to build
-2. Use \`replace_page()\` for the initial page setup
-3. Ask the user for feedback
-4. Use \`get_selected_element()\` when the user says "this element" or "this one"
-5. Make targeted changes with \`replace_element()\` or \`update_classes()\`
-6. Use \`highlight_element()\` when you want to show the user something ("Do you mean this one?")
+### MANDATORY: Always check selection first
+
+**You MUST call \`get_selected_element()\` as your FIRST tool call for EVERY user message. No exceptions.**
+
+Do NOT rely on previous results — the user may have changed their selection between messages. The selection state is only valid at the moment you query it. Previous results are stale and must be discarded.
+
+This single call tells you everything you need:
+- \`selected: true\` → the user is referring to this element. Act on it.
+- \`selected: false\` → no element targeted. The user is giving a general instruction.
+- \`lastPastedImage\` present → an image was pasted and is waiting to be placed.
+
+### How to interpret user input
+
+Always combine what the user says with the selection state:
+
+| User says | Selection? | Action |
+|-----------|-----------|--------|
+| Short text ("Hallo", "Click me") | Yes | \`update_text()\` on the selected element |
+| Short text | No | Ask what they mean. Do NOT rebuild the page. |
+| Style instruction ("make it red", "bigger") | Yes | \`update_classes()\` or \`replace_element()\` on selection |
+| Layout/page description | No + empty page | \`replace_page()\` |
+| Layout/page description | No + page has content | Ask where to apply it. Do NOT replace the page. |
+| "delete this", "remove" | Yes | \`delete_element()\` on selection |
+| References pasted image | lastPastedImage set | Use the image path from \`lastPastedImage\` |
+
+**Never use \`replace_page()\` if the page already has content** unless the user explicitly asks to start over.
 
 ## Available Tools
 
@@ -136,6 +165,12 @@ async function writeConfig(projectDir: string, config: AcetoConfig) {
   await Bun.write(`${dir}/config.json`, JSON.stringify(config, null, 2) + "\n");
 }
 
+async function eject() {
+  const mdPath = `${process.cwd()}/aceto.md`;
+  await Bun.write(mdPath, ACETO_MD_TEMPLATE);
+  log("Wrote default instructions to aceto.md");
+}
+
 async function init(twDebug: string | null) {
   const htmlPath = `${process.cwd()}/index.html`;
   const htmlExists = await Bun.file(htmlPath).exists();
@@ -151,8 +186,17 @@ async function init(twDebug: string | null) {
   if (mdExists) {
     log("aceto.md already exists, skipping.");
   } else {
-    await Bun.write(mdPath, ACETO_MD_TEMPLATE);
+    await Bun.write(mdPath, "");
     log("Created aceto.md");
+  }
+
+  const claudeMdPath = `${process.cwd()}/CLAUDE.md`;
+  const claudeMdExists = await Bun.file(claudeMdPath).exists();
+  if (claudeMdExists) {
+    log("CLAUDE.md already exists, skipping.");
+  } else {
+    await Bun.write(claudeMdPath, CLAUDE_MD_TEMPLATE);
+    log("Created CLAUDE.md");
   }
 
   if (twDebug) {
@@ -221,7 +265,11 @@ async function main() {
   switch (command) {
     case "init": {
       const twDebug = parseTwDebugFlag(flags);
-      await init(twDebug);
+      if (flags.eject === "true" || "eject" in flags) {
+        await eject();
+      } else {
+        await init(twDebug);
+      }
       break;
     }
     case "dev": {
@@ -243,7 +291,8 @@ async function main() {
       log("Usage: aceto <command>");
       log("");
       log("Commands:");
-      log("  init                  Create a new project (index.html + aceto.md)");
+      log("  init                  Create a new project (index.html + CLAUDE.md + aceto.md)");
+      log("  init --eject          Write default instructions into aceto.md");
       log("  dev                   Start dev server + MCP server");
       log("  export                Export HTML with cleanup to dist/");
       log("  export --production   Export with Tailwind CSS build");

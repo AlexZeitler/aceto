@@ -51,12 +51,19 @@ aceto export --production
 ## CLI
 
 ```bash
-aceto init                    # Create index.html + aceto.md
+aceto init                    # Create index.html + CLAUDE.md + aceto.md
+aceto init --eject            # Write default instructions into aceto.md
 aceto dev                     # Start dev server + MCP server
 aceto dev --port 3001         # Custom port
 aceto export                  # Export HTML with cleanup to dist/
 aceto export --production     # Export with Tailwind CSS build
 ```
+
+## Agent Instructions
+
+On `aceto init`, a minimal `CLAUDE.md` is created that tells the agent to call `get_instructions()` via MCP. This tool returns the project's `aceto.md` if it has content, or the built-in default instructions.
+
+To customize the instructions, run `aceto init --eject` to write the defaults into `aceto.md`, then edit to your needs.
 
 ## Tech Stack
 
