@@ -12,6 +12,9 @@ import {
   getUndoButton,
   getRedoButton,
   updateModeIndicator,
+  showClassEditor,
+  hideClassEditor,
+  getClassEditorInput,
 } from "./highlight";
 import { initDepthNavigation, clearDepthNavigation } from "./depth";
 import { updateTableControls, hideTableControls } from "./table-controls";
@@ -21,6 +24,8 @@ let selectedElements: Element[] = [];
 let selectMode = true;
 let editingElement: HTMLElement | null = null;
 let editOriginalText: string = "";
+let classEditingElement: Element | null = null;
+let classEditOriginal: string = "";
 
 function getSelectedElement(): Element | null {
   return selectedElements[selectedElements.length - 1] ?? null;
@@ -31,6 +36,14 @@ export function toggleSelectMode() {
   updateModeIndicator(selectMode);
   if (!selectMode) {
     hideHover();
+    if (selectedElements.length > 0) {
+      selectedElements = [];
+      hideSelection();
+      hideTableControls();
+      setUserSelector("");
+      clearDepthNavigation();
+      send({ type: "deselect" });
+    }
   }
 }
 
@@ -348,6 +361,37 @@ function isEditing(): boolean {
   return editingElement !== null;
 }
 
+function isClassEditing(): boolean {
+  return classEditingElement !== null;
+}
+
+function commitClassEdit() {
+  if (!classEditingElement) return;
+  const input = getClassEditorInput();
+  if (!input) return;
+  const newClasses = input.value.trim();
+  hideClassEditor();
+  if (newClasses !== classEditOriginal) {
+    const oldSet = new Set(classEditOriginal.split(/\s+/).filter(Boolean));
+    const newSet = new Set(newClasses.split(/\s+/).filter(Boolean));
+    const add = [...newSet].filter(c => !oldSet.has(c));
+    const remove = [...oldSet].filter(c => !newSet.has(c));
+    if (add.length > 0 || remove.length > 0) {
+      const result = generateSelector(classEditingElement);
+      const fallback = generateFallbackSelector(classEditingElement);
+      send({ type: "class_edit", selector: result.selector, fallbackSelector: fallback, add, remove });
+    }
+  }
+  classEditingElement = null;
+  classEditOriginal = "";
+}
+
+function cancelClassEdit() {
+  hideClassEditor();
+  classEditingElement = null;
+  classEditOriginal = "";
+}
+
 function handleClipboardPaste() {
   // Create a hidden editable element so the browser fires a paste event
   const receiver = document.createElement("textarea");
@@ -491,6 +535,14 @@ function init() {
           }
         }
 
+        // While class-editing, click outside → commit and consume event
+        if (isClassEditing()) {
+          if (eventName === "click" || eventName === "mousedown") {
+            commitClassEdit();
+          }
+          return;
+        }
+
         // Ctrl+V / Cmd+V → set up paste receiver (don't preventDefault — paste needs it)
         if (eventName === "keydown") {
           const ke = e as KeyboardEvent;
@@ -518,15 +570,37 @@ function init() {
         }
 
         // "a" to open asset picker (not during editing)
-        if (eventName === "keydown" && (e as KeyboardEvent).key === "a" && !isEditing()) {
+        if (eventName === "keydown" && (e as KeyboardEvent).key === "a" && !isEditing() && !isClassEditing()) {
           openAssetPicker();
           return;
         }
 
         // "e" to toggle select/preview mode (not during editing)
-        if (eventName === "keydown" && (e as KeyboardEvent).key === "e" && !isEditing()) {
+        if (eventName === "keydown" && (e as KeyboardEvent).key === "e" && !isEditing() && !isClassEditing()) {
           e.stopPropagation();
           toggleSelectMode();
+          return;
+        }
+
+        // "c" to open class editor on selected element
+        if (eventName === "keydown" && (e as KeyboardEvent).key === "c" && !isEditing() && !isClassEditing()) {
+          e.preventDefault();
+          e.stopPropagation();
+          const sel = getSelectedElement();
+          if (sel) {
+            classEditingElement = sel;
+            classEditOriginal = Array.from(sel.classList).join(" ");
+            const input = showClassEditor(sel);
+            input.addEventListener("keydown", (ke) => {
+              if (ke.key === "Enter") { ke.preventDefault(); commitClassEdit(); }
+              if (ke.key === "Escape") { ke.preventDefault(); cancelClassEdit(); }
+            });
+            input.addEventListener("focusout", () => {
+              setTimeout(() => { if (classEditingElement) commitClassEdit(); }, 100);
+            });
+            input.focus();
+            input.select();
+          }
           return;
         }
 
@@ -611,7 +685,7 @@ function init() {
   document.addEventListener(
     "mousemove",
     (e) => {
-      if (!selectMode || isEditing()) {
+      if (!selectMode || isEditing() || isClassEditing()) {
         hideHover();
         return;
       }

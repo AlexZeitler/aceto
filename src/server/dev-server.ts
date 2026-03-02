@@ -12,6 +12,7 @@ import {
   redo,
   deleteElement,
   insertElement,
+  updateClasses,
   tableAddRow,
   tableRemoveRow,
   tableAddCol,
@@ -151,6 +152,14 @@ interface WsShortcutExpandMessage {
   html: string;
 }
 
+interface WsClassEditMessage {
+  type: "class_edit";
+  selector: string;
+  fallbackSelector?: string;
+  add: string[];
+  remove: string[];
+}
+
 interface WsListAssetsMessage {
   type: "list_assets";
 }
@@ -160,7 +169,7 @@ interface WsPickAssetMessage {
   path: string;
 }
 
-type WsMessage = WsSelectMessage | WsMultiSelectMessage | WsNavigateMessage | WsReadyMessage | WsDeselectMessage | WsTextEditMessage | WsUndoRedoMessage | WsDeleteElementMessage | WsTableOpMessage | WsShortcutExpandMessage | WsListAssetsMessage | WsPickAssetMessage;
+type WsMessage = WsSelectMessage | WsMultiSelectMessage | WsNavigateMessage | WsReadyMessage | WsDeselectMessage | WsTextEditMessage | WsUndoRedoMessage | WsDeleteElementMessage | WsTableOpMessage | WsShortcutExpandMessage | WsClassEditMessage | WsListAssetsMessage | WsPickAssetMessage;
 
 function handleWsMessage(
   state: AppState,
@@ -340,6 +349,13 @@ function handleWsMessage(
       } catch (e: any) {
         log(`Shortcut expand failed: ${e.message}`);
       }
+      break;
+    }
+    case "class_edit": {
+      const selector = data.fallbackSelector || data.selector;
+      updateClasses(state, selector, data.add, data.remove)
+        .then(() => log(`Class edit: ${selector} +[${data.add}] -[${data.remove}]`))
+        .catch((e: any) => log(`Class edit failed: ${e.message}`));
       break;
     }
     case "list_assets": {

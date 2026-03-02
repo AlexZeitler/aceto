@@ -16,6 +16,7 @@ let pageButton: HTMLElement | null = null;
 let pageDropdown: HTMLElement | null = null;
 let tableToolbar: HTMLElement | null = null;
 let assetModal: HTMLElement | null = null;
+let classEditorInput: HTMLInputElement | null = null;
 
 let currentUserSelector = "";
 let currentAgentSelector = "";
@@ -396,6 +397,20 @@ export function initHighlightHost(): ShadowRoot {
       font: 11px/1.4 ui-monospace, monospace;
       color: #64748b;
     }
+    /* Class editor input */
+    .aceto-class-editor {
+      position: fixed;
+      pointer-events: auto;
+      background: #1e293b;
+      color: #e2e8f0;
+      font: 11px/1.4 ui-monospace, monospace;
+      padding: 2px 6px;
+      border-radius: 3px;
+      border: 1px solid #f43f5e;
+      outline: none;
+      z-index: 2147483647;
+      min-width: 200px;
+    }
   `;
   shadowRoot.appendChild(style);
 
@@ -408,6 +423,12 @@ export function initHighlightHost(): ShadowRoot {
   hoverLabel.className = "aceto-label";
   hoverLabel.style.display = "none";
   shadowRoot.appendChild(hoverLabel);
+
+  classEditorInput = document.createElement("input");
+  classEditorInput.type = "text";
+  classEditorInput.className = "aceto-class-editor";
+  classEditorInput.style.display = "none";
+  shadowRoot.appendChild(classEditorInput);
 
   selectionOverlay = document.createElement("div");
   selectionOverlay.className = "aceto-overlay aceto-selection";
@@ -838,6 +859,29 @@ function renderPageDropdown() {
 
     pageDropdown.appendChild(item);
   }
+}
+
+// --- Class Editor ---
+
+export function showClassEditor(el: Element): HTMLInputElement {
+  if (!classEditorInput) throw new Error("Class editor not initialized");
+  const rect = el.getBoundingClientRect();
+  classEditorInput.value = Array.from(el.classList).join(" ");
+
+  // Position above the element (same logic as hoverLabel)
+  const labelTop = rect.top - 22;
+  classEditorInput.style.top = (labelTop < 0 ? rect.bottom + 2 : labelTop) + "px";
+  classEditorInput.style.left = rect.left + "px";
+  classEditorInput.style.display = "block";
+  return classEditorInput;
+}
+
+export function hideClassEditor() {
+  if (classEditorInput) classEditorInput.style.display = "none";
+}
+
+export function getClassEditorInput(): HTMLInputElement | null {
+  return classEditorInput;
 }
 
 function updateBreadcrumb() {

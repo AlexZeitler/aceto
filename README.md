@@ -26,6 +26,7 @@ A local dev server with a browser overlay and MCP interface for iterating on UIs
 - **Content shortcuts** — type `[]` or `[x]` in a cell to insert a checkbox
 - **Element defaults** — define default classes for generated elements via `aceto.defaults.json`
 - **Paste images** — Ctrl+V with selection inserts instantly; without selection, stages the image for agent-driven placement
+- **CSS class editor** — press `c` on a selected element to edit its Tailwind classes inline; Enter to apply, Escape to cancel
 - **Asset picker** — press `a` to browse and reuse previously pasted images from the assets folder
 - **Screenshots** — the agent can capture full-page or element-level screenshots via `get_screenshot()`, saved to `.aceto/screenshots/`
 
@@ -43,6 +44,7 @@ A local dev server with a browser overlay and MCP interface for iterating on UIs
 | Double-click | Inline edit text |
 | Scroll wheel | Navigate depth (parent/child) |
 | Tab / Shift+Tab | Next/previous cell (during table editing) |
+| `c` | Edit CSS classes of selected element |
 | `a` | Open asset picker |
 | Del | Delete selected element |
 | Esc | Close modal / deselect |
