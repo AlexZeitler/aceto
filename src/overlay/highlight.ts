@@ -11,9 +11,12 @@ let modeToggleButton: HTMLElement | null = null;
 let undoButton: HTMLElement | null = null;
 let redoButton: HTMLElement | null = null;
 let pasteImageIndicator: HTMLElement | null = null;
+let pageButton: HTMLElement | null = null;
+let pageDropdown: HTMLElement | null = null;
 
 let currentUserSelector = "";
 let currentAgentSelector = "";
+let currentPages: Array<{ path: string; file: string }> = [];
 
 export function initHighlightHost(): ShadowRoot {
   if (shadowRoot) return shadowRoot;
@@ -195,6 +198,64 @@ export function initHighlightHost(): ShadowRoot {
     .aceto-paste-dismiss:hover {
       color: #e2e8f0;
     }
+    /* Page dropdown */
+    .aceto-page-btn {
+      pointer-events: auto;
+      cursor: pointer;
+      padding: 2px 8px;
+      border-radius: 3px;
+      border: 1px solid transparent;
+      background: transparent;
+      font: 11px/1.4 ui-monospace, monospace;
+      color: #e2e8f0;
+      white-space: nowrap;
+      user-select: none;
+      flex-shrink: 0;
+    }
+    .aceto-page-btn:hover {
+      border-color: #475569;
+    }
+    .aceto-page-dropdown {
+      position: fixed;
+      bottom: 28px;
+      left: 0;
+      min-width: 200px;
+      max-height: 300px;
+      overflow-y: auto;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 4px;
+      box-shadow: 0 -4px 12px rgba(0,0,0,0.3);
+      display: none;
+      pointer-events: auto;
+      z-index: 2147483647;
+    }
+    .aceto-page-dropdown.open {
+      display: block;
+    }
+    .aceto-page-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 10px;
+      font: 11px/1.4 ui-monospace, monospace;
+      color: #94a3b8;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .aceto-page-item:hover {
+      background: #334155;
+      color: #e2e8f0;
+    }
+    .aceto-page-item-active {
+      color: #e2e8f0;
+      font-weight: 600;
+    }
+    .aceto-page-item-check {
+      width: 14px;
+      text-align: center;
+      flex-shrink: 0;
+    }
   `;
   shadowRoot.appendChild(style);
 
@@ -220,6 +281,43 @@ export function initHighlightHost(): ShadowRoot {
   // Breadcrumb bar
   breadcrumbBar = document.createElement("div");
   breadcrumbBar.className = "aceto-breadcrumb";
+
+  // Page dropdown
+  pageButton = document.createElement("button");
+  pageButton.className = "aceto-page-btn";
+  pageButton.textContent = getCurrentPageLabel() + " \u25BE";
+  breadcrumbBar.appendChild(pageButton);
+
+  pageDropdown = document.createElement("div");
+  pageDropdown.className = "aceto-page-dropdown";
+
+  let skipNextDocClick = false;
+  pageButton.addEventListener("click", () => {
+    const willOpen = !pageDropdown!.classList.contains("open");
+    pageDropdown!.classList.toggle("open");
+    if (willOpen) {
+      skipNextDocClick = true;
+    }
+  });
+
+  // Close dropdown on outside click or Escape
+  document.addEventListener("click", () => {
+    if (skipNextDocClick) {
+      skipNextDocClick = false;
+      return;
+    }
+    pageDropdown?.classList.remove("open");
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      pageDropdown?.classList.remove("open");
+    }
+  });
+
+  const pageSep = document.createElement("span");
+  pageSep.className = "aceto-breadcrumb-sep";
+  pageSep.textContent = "|";
+  breadcrumbBar.appendChild(pageSep);
 
   breadcrumbUserSpan = document.createElement("span");
   breadcrumbUserSpan.className = "aceto-breadcrumb-user";
@@ -266,6 +364,8 @@ export function initHighlightHost(): ShadowRoot {
   breadcrumbBar.appendChild(toolbar);
 
   shadowRoot.appendChild(breadcrumbBar);
+  // Append dropdown to shadowRoot (not breadcrumbBar) to avoid overflow:hidden clipping
+  shadowRoot.appendChild(pageDropdown);
 
   document.documentElement.appendChild(host);
   return shadowRoot;
@@ -504,6 +604,54 @@ export function clearPastedImage() {
   if (!pasteImageIndicator) return;
   pasteImageIndicator.innerHTML = "";
   pasteImageIndicator.style.display = "none";
+}
+
+function getCurrentPageLabel(): string {
+  const pathname = window.location.pathname;
+  if (pathname === "/") return "index.html";
+  // "/about" → "about.html", "/dashboard/settings" → "dashboard/settings.html"
+  return pathname.replace(/^\//, "") + ".html";
+}
+
+export function updatePageList(pages: Array<{ path: string; file: string }>) {
+  currentPages = pages;
+  renderPageDropdown();
+  // Update button text in case current page changed
+  if (pageButton) {
+    pageButton.textContent = getCurrentPageLabel() + " \u25BE";
+  }
+}
+
+function renderPageDropdown() {
+  if (!pageDropdown) return;
+  pageDropdown.innerHTML = "";
+
+  const currentPath = window.location.pathname;
+
+  for (const page of currentPages) {
+    const item = document.createElement("div");
+    const isActive = page.path === currentPath;
+    item.className = "aceto-page-item" + (isActive ? " aceto-page-item-active" : "");
+
+    const check = document.createElement("span");
+    check.className = "aceto-page-item-check";
+    check.textContent = isActive ? "\u2713" : "";
+    item.appendChild(check);
+
+    const label = document.createElement("span");
+    label.textContent = page.path + " (" + page.file + ")";
+    item.appendChild(label);
+
+    item.addEventListener("click", (e) => {
+      e.stopPropagation();
+      pageDropdown!.classList.remove("open");
+      if (!isActive) {
+        window.location.href = page.path;
+      }
+    });
+
+    pageDropdown.appendChild(item);
+  }
 }
 
 function updateBreadcrumb() {

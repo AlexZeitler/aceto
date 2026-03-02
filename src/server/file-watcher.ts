@@ -2,7 +2,7 @@ import { watch } from "fs";
 import { readFile } from "fs/promises";
 import path from "path";
 import type { AppState } from "../state";
-import { broadcast } from "./dev-server";
+import { broadcast, broadcastPageList } from "./dev-server";
 import { extractBodyContent } from "../utils/html-parser";
 import { log } from "../utils/log";
 
@@ -36,6 +36,7 @@ export function startFileWatcher(state: AppState) {
             } else {
               broadcast(state, { type: "reload" });
             }
+            broadcastPageList(state);
           } catch {
             broadcast(state, { type: "reload" });
           }

@@ -6,7 +6,7 @@ import type { AppState, SelectionData } from "../state";
 import { pushSelectionHistory, getNextMid, getFileHistory } from "../state";
 import { injectOverlay } from "./inject";
 import { handleMcpRequest } from "../mcp/server";
-import { addDataMid, updateText } from "../utils/html-parser";
+import { addDataMid, updateText, getPages } from "../utils/html-parser";
 import { undo, redo, deleteElement, insertElement } from "../mcp/html-ops";
 
 const MIME_TYPES: Record<string, string> = {
@@ -56,6 +56,16 @@ export function broadcast(state: AppState, message: object) {
   for (const ws of state.wsClients) {
     ws.send(json);
   }
+}
+
+export function broadcastPageList(state: AppState) {
+  const files = getPages(state.projectDir);
+  const pages = files.map((file) => {
+    let urlPath = "/" + file.replace(/\.html$/, "").replace(/\/index$/, "");
+    if (urlPath === "/index") urlPath = "/";
+    return { path: urlPath, file };
+  });
+  broadcast(state, { type: "pages", pages });
 }
 
 interface WsSelectMessage {
@@ -324,6 +334,7 @@ export function startDevServer(state: AppState) {
         state.wsClients.add(ws);
         ws.send(JSON.stringify({ type: "mid_counter", value: state.nextMid }));
         ws.send(JSON.stringify({ type: "config", twDebug: state.twDebug }));
+        broadcastPageList(state);
         log(`Client connected (${state.wsClients.size} total)`);
       },
       message(ws, message) {

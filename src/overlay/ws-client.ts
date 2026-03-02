@@ -6,6 +6,7 @@ import {
   flashElement,
   initHighlightHost,
   showPastedImage,
+  updatePageList,
 } from "./highlight";
 import { initDebugScreens } from "./debug-screens";
 
@@ -100,6 +101,11 @@ on("scroll_to", (data) => {
 // Pasted image thumbnail
 on("image_pasted", (data) => {
   showPastedImage(data.path);
+});
+
+// Page list
+on("pages", (data) => {
+  updatePageList(data.pages);
 });
 
 // Mid counter sync
