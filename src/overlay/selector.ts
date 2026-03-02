@@ -282,7 +282,20 @@ function expandShortcuts(text: string): string | null {
   return null;
 }
 
+const VALUE_EDITABLE_TAGS = new Set(["input", "textarea"]);
+
+function isValueElement(el: Element): boolean {
+  const tag = el.tagName.toLowerCase();
+  if (tag === "input") {
+    const type = (el as HTMLInputElement).type.toLowerCase();
+    // Only text-like inputs are editable
+    return ["text", "email", "url", "tel", "search", "password", "number"].includes(type);
+  }
+  return tag === "textarea";
+}
+
 function isEditableElement(el: Element): boolean {
+  if (isValueElement(el)) return true;
   const tag = el.tagName.toLowerCase();
   if (EDITABLE_TAGS.has(tag)) return true;
 
@@ -305,17 +318,24 @@ function isEditableElement(el: Element): boolean {
 function startEditing(el: HTMLElement) {
   if (editingElement) return;
   editingElement = el;
-  editOriginalText = el.textContent || "";
 
-  el.contentEditable = "true";
-  el.focus();
+  if (isValueElement(el)) {
+    const input = el as HTMLInputElement | HTMLTextAreaElement;
+    editOriginalText = input.value;
+    input.focus();
+    input.select();
+  } else {
+    editOriginalText = el.textContent || "";
+    el.contentEditable = "true";
+    el.focus();
 
-  // Select all text
-  const range = document.createRange();
-  range.selectNodeContents(el);
-  const sel = window.getSelection();
-  sel?.removeAllRanges();
-  sel?.addRange(range);
+    // Select all text
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    const sel = window.getSelection();
+    sel?.removeAllRanges();
+    sel?.addRange(range);
+  }
 
   // Visual feedback: dashed outline
   el.style.outline = "2px dashed #f43f5e";
@@ -327,43 +347,67 @@ function startEditing(el: HTMLElement) {
 function commitEdit() {
   if (!editingElement) return;
   const el = editingElement;
-  const newText = el.textContent || "";
-  el.contentEditable = "false";
-  el.style.outline = "";
-  el.style.outlineOffset = "";
 
-  if (newText !== editOriginalText) {
-    const result = generateSelector(el);
-    const fallback = generateFallbackSelector(el);
+  if (isValueElement(el)) {
+    const input = el as HTMLInputElement | HTMLTextAreaElement;
+    const newValue = input.value;
+    el.style.outline = "";
+    el.style.outlineOffset = "";
 
-    // Check for content shortcuts
-    const expanded = expandShortcuts(newText);
-    if (expanded) {
-      // Replace the element's innerHTML with the expanded HTML
+    if (newValue !== editOriginalText) {
+      const result = generateSelector(el);
+      const fallback = generateFallbackSelector(el);
       send({
-        type: "shortcut_expand",
+        type: "value_edit",
         selector: result.selector,
         fallbackSelector: fallback,
-        html: expanded,
+        value: newValue,
       });
-    } else {
-      send({
-        type: "text_edit",
-        selector: result.selector,
-        fallbackSelector: fallback,
-        text: newText,
-      });
+    }
+  } else {
+    const newText = el.textContent || "";
+    el.contentEditable = "false";
+    el.style.outline = "";
+    el.style.outlineOffset = "";
+
+    if (newText !== editOriginalText) {
+      const result = generateSelector(el);
+      const fallback = generateFallbackSelector(el);
+
+      // Check for content shortcuts
+      const expanded = expandShortcuts(newText);
+      if (expanded) {
+        send({
+          type: "shortcut_expand",
+          selector: result.selector,
+          fallbackSelector: fallback,
+          html: expanded,
+        });
+      } else {
+        send({
+          type: "text_edit",
+          selector: result.selector,
+          fallbackSelector: fallback,
+          text: newText,
+        });
+      }
     }
   }
 
+  if (isValueElement(el)) (el as HTMLElement).blur();
   editingElement = null;
   editOriginalText = "";
 }
 
 function cancelEdit() {
   if (!editingElement) return;
-  editingElement.textContent = editOriginalText;
-  editingElement.contentEditable = "false";
+  if (isValueElement(editingElement)) {
+    (editingElement as HTMLInputElement | HTMLTextAreaElement).value = editOriginalText;
+    (editingElement as HTMLElement).blur();
+  } else {
+    editingElement.textContent = editOriginalText;
+    editingElement.contentEditable = "false";
+  }
   editingElement.style.outline = "";
   editingElement.style.outlineOffset = "";
   editingElement = null;
@@ -512,9 +556,19 @@ function init() {
             if (eventName === "keydown") {
               const ke = e as KeyboardEvent;
               const key = ke.key;
-              if (key === "Enter" && !ke.shiftKey) {
-                e.preventDefault();
-                commitEdit();
+              if (key === "Enter") {
+                if (editingElement?.tagName.toLowerCase() === "textarea") {
+                  // Ctrl+Enter commits textarea, plain Enter is a newline
+                  if (ke.ctrlKey || ke.metaKey) {
+                    e.preventDefault();
+                    commitEdit();
+                  }
+                  return;
+                }
+                if (!ke.shiftKey) {
+                  e.preventDefault();
+                  commitEdit();
+                }
                 return;
               }
               if (key === "Escape") {
@@ -583,33 +637,36 @@ function init() {
         }
 
         // Single-key shortcuts: ignore when any modifier is held (Ctrl+C, Ctrl+R, etc.)
+        // Also ignore when a form element has focus (e.g. editing an input value)
         const hasModifier = eventName === "keydown" && ((e as KeyboardEvent).ctrlKey || (e as KeyboardEvent).metaKey || (e as KeyboardEvent).altKey);
+        const activeTag = document.activeElement?.tagName.toLowerCase();
+        const isTypingInFormElement = activeTag === "input" || activeTag === "textarea" || activeTag === "select";
 
         // "a" to open asset picker (not during editing)
-        if (eventName === "keydown" && !hasModifier && (e as KeyboardEvent).key === "a" && !isEditing() && !isClassEditing()) {
+        if (eventName === "keydown" && !hasModifier && (e as KeyboardEvent).key === "a" && !isEditing() && !isClassEditing() && !isTypingInFormElement) {
           openAssetPicker();
           return;
         }
 
         // "e" to toggle select/preview mode (not during editing)
-        if (eventName === "keydown" && !hasModifier && (e as KeyboardEvent).key === "e" && !isEditing() && !isClassEditing()) {
+        if (eventName === "keydown" && !hasModifier && (e as KeyboardEvent).key === "e" && !isEditing() && !isClassEditing() && !isTypingInFormElement) {
           e.stopPropagation();
           toggleSelectMode();
           return;
         }
 
         // "u" for undo, "r" for redo
-        if (eventName === "keydown" && !hasModifier && (e as KeyboardEvent).key === "u" && !isEditing() && !isClassEditing()) {
+        if (eventName === "keydown" && !hasModifier && (e as KeyboardEvent).key === "u" && !isEditing() && !isClassEditing() && !isTypingInFormElement) {
           send({ type: "undo" });
           return;
         }
-        if (eventName === "keydown" && !hasModifier && (e as KeyboardEvent).key === "r" && !isEditing() && !isClassEditing()) {
+        if (eventName === "keydown" && !hasModifier && (e as KeyboardEvent).key === "r" && !isEditing() && !isClassEditing() && !isTypingInFormElement) {
           send({ type: "redo" });
           return;
         }
 
         // "c" to open class editor on selected element
-        if (eventName === "keydown" && !hasModifier && (e as KeyboardEvent).key === "c" && !isEditing() && !isClassEditing()) {
+        if (eventName === "keydown" && !hasModifier && (e as KeyboardEvent).key === "c" && !isEditing() && !isClassEditing() && !isTypingInFormElement) {
           e.preventDefault();
           e.stopPropagation();
           const sel = getSelectedElement();
@@ -631,7 +688,7 @@ function init() {
         }
 
         // "y" to yank (copy) selected element
-        if (eventName === "keydown" && !hasModifier && (e as KeyboardEvent).key === "y" && !isEditing() && !isClassEditing()) {
+        if (eventName === "keydown" && !hasModifier && (e as KeyboardEvent).key === "y" && !isEditing() && !isClassEditing() && !isTypingInFormElement) {
           const sel = getSelectedElement();
           if (sel) {
             yankedHtml = sel.outerHTML;
@@ -641,7 +698,7 @@ function init() {
         }
 
         // "p" to paste yanked element after selection
-        if (eventName === "keydown" && !hasModifier && (e as KeyboardEvent).key === "p" && !isEditing() && !isClassEditing()) {
+        if (eventName === "keydown" && !hasModifier && (e as KeyboardEvent).key === "p" && !isEditing() && !isClassEditing() && !isTypingInFormElement) {
           const sel = getSelectedElement();
           if (sel && yankedHtml) {
             const result = generateSelector(sel);

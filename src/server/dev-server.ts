@@ -6,7 +6,7 @@ import type { AppState, SelectionData } from "../state";
 import { pushSelectionHistory, getNextMid, getFileHistory } from "../state";
 import { injectOverlay } from "./inject";
 import { handleMcpRequest } from "../mcp/server";
-import { addDataMid, updateText, getPages, extractBodyContent } from "../utils/html-parser";
+import { addDataMid, updateText, updateAttribute, getPages, extractBodyContent } from "../utils/html-parser";
 import {
   undo,
   redo,
@@ -145,6 +145,13 @@ interface WsTableOpMessage {
   colIndex?: number;
 }
 
+interface WsValueEditMessage {
+  type: "value_edit";
+  selector: string;
+  fallbackSelector?: string;
+  value: string;
+}
+
 interface WsShortcutExpandMessage {
   type: "shortcut_expand";
   selector: string;
@@ -176,7 +183,7 @@ interface WsPickAssetMessage {
   path: string;
 }
 
-type WsMessage = WsSelectMessage | WsMultiSelectMessage | WsNavigateMessage | WsReadyMessage | WsDeselectMessage | WsTextEditMessage | WsUndoRedoMessage | WsDeleteElementMessage | WsTableOpMessage | WsShortcutExpandMessage | WsClassEditMessage | WsPasteElementMessage | WsListAssetsMessage | WsPickAssetMessage;
+type WsMessage = WsSelectMessage | WsMultiSelectMessage | WsNavigateMessage | WsReadyMessage | WsDeselectMessage | WsTextEditMessage | WsValueEditMessage | WsUndoRedoMessage | WsDeleteElementMessage | WsTableOpMessage | WsShortcutExpandMessage | WsClassEditMessage | WsPasteElementMessage | WsListAssetsMessage | WsPickAssetMessage;
 
 function handleWsMessage(
   state: AppState,
@@ -283,6 +290,24 @@ function handleWsMessage(
         }
       } catch (e: any) {
         log(`Text edit failed: ${e.message}`);
+      }
+      break;
+    }
+    case "value_edit": {
+      try {
+        const filePath = resolveCurrentFilePath(state);
+        const html = readFileSync(filePath, "utf-8");
+        const selector = data.fallbackSelector || data.selector;
+        const newHtml = updateAttribute(html, selector, "value", data.value);
+        if (newHtml !== html) {
+          const history = getFileHistory(state, filePath);
+          history.pushEdit(html, newHtml);
+          state.recentServerWrites.add(filePath);
+          writeFileSync(filePath, newHtml, "utf-8");
+          log(`Value edit: ${selector} → "${data.value.slice(0, 50)}"`);
+        }
+      } catch (e: any) {
+        log(`Value edit failed: ${e.message}`);
       }
       break;
     }
