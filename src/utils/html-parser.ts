@@ -14,24 +14,60 @@ interface ElementInfo {
 
 export class SelectorNotFoundError extends Error {
   constructor(selector: string, html: string) {
-    const ids = findAvailableIds(html);
-    const idList = ids.length > 0 ? ids.join(", ") : "none";
-    super(`Selector "${selector}" not found. Available IDs: ${idList}`);
+    const info = findAvailableSelectors(html);
+    const parts: string[] = [];
+    if (info.ids.length > 0) parts.push(`IDs: ${info.ids.join(", ")}`);
+    if (info.classes.length > 0) parts.push(`Classes: ${info.classes.join(", ")}`);
+    if (info.tags.length > 0) parts.push(`Tags: ${info.tags.join(", ")}`);
+    const suggestion = parts.length > 0 ? parts.join(". ") : "No elements found";
+    super(`Selector "${selector}" not found. ${suggestion}`);
     this.name = "SelectorNotFoundError";
   }
 }
 
-function findAvailableIds(html: string): string[] {
+function findAvailableSelectors(html: string): {
+  ids: string[];
+  classes: string[];
+  tags: string[];
+} {
   const ast = parse(html, { sourceCodeLocationInfo: true });
   const allElements = selectAll("*", ast.childNodes, {
     adapter: parse5Adapter,
   }) as Element[];
+
   const ids: string[] = [];
+  const classCounts = new Map<string, number>();
+  const tagCounts = new Map<string, number>();
+
   for (const el of allElements) {
     const idAttr = el.attrs.find((a) => a.name === "id");
     if (idAttr?.value) ids.push(`#${idAttr.value}`);
+
+    const classAttr = el.attrs.find((a) => a.name === "class");
+    if (classAttr?.value) {
+      for (const cls of classAttr.value.split(/\s+/).filter(Boolean)) {
+        classCounts.set(cls, (classCounts.get(cls) || 0) + 1);
+      }
+    }
+
+    const tag = el.tagName;
+    if (tag && !["html", "head", "body", "meta", "link", "script", "style", "title"].includes(tag)) {
+      tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
+    }
   }
-  return ids;
+
+  // Top 10 classes by frequency
+  const classes = [...classCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([cls]) => `.${cls}`);
+
+  // Tag summary with counts
+  const tags = [...tagCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([tag, count]) => `${tag}(${count})`);
+
+  return { ids, classes, tags };
 }
 
 export function findElement(
@@ -270,6 +306,96 @@ export function extractBodyContent(html: string): string | null {
   const contentStart = body.sourceCodeLocation.startTag.endOffset;
   const contentEnd = body.sourceCodeLocation.endTag.startOffset;
   return html.slice(contentStart, contentEnd);
+}
+
+export function extractElementWithContext(
+  html: string,
+  selector: string,
+  depth: number = 0,
+): string {
+  const info = findElement(html, selector);
+  if (!info) throw new SelectorNotFoundError(selector, html);
+
+  if (depth <= 0) {
+    return html.slice(info.startOffset, info.endOffset);
+  }
+
+  // Collect ancestors up to `depth` levels (stop at html/body)
+  const ancestors: Element[] = [];
+  let current = info.element;
+  for (let i = 0; i < depth; i++) {
+    const parent = (current as any).parentNode as Element | null;
+    if (!parent || !parent.sourceCodeLocation) break;
+    const parentTag = parent.tagName?.toLowerCase();
+    if (!parentTag || parentTag === "html" || parentTag === "body") break;
+    ancestors.unshift(parent);
+    current = parent;
+  }
+
+  if (ancestors.length === 0) {
+    return html.slice(info.startOffset, info.endOffset);
+  }
+
+  // Build context: for each ancestor, show the opening tag, "..." for siblings, and the target content
+  let result = "";
+  const targetStart = info.startOffset;
+  const targetEnd = info.endOffset;
+
+  for (let i = 0; i < ancestors.length; i++) {
+    const anc = ancestors[i];
+    const loc = anc.sourceCodeLocation!;
+    const openTagEnd = loc.startTag!.endOffset;
+    const closeTagStart = loc.endTag!.startOffset;
+    const indent = "  ".repeat(i);
+
+    // Opening tag
+    result += indent + html.slice(loc.startTag!.startOffset, openTagEnd) + "\n";
+
+    // For the innermost ancestor, show siblings as "..." and the target element
+    if (i === ancestors.length - 1) {
+      const innerIndent = "  ".repeat(i + 1);
+      // Check if there's content before the target
+      const contentBefore = html.slice(openTagEnd, targetStart).trim();
+      if (contentBefore) {
+        result += innerIndent + "...\n";
+      }
+      result += innerIndent + html.slice(targetStart, targetEnd) + "\n";
+      // Check if there's content after the target
+      const contentAfter = html.slice(targetEnd, closeTagStart).trim();
+      if (contentAfter) {
+        result += innerIndent + "...\n";
+      }
+    }
+  }
+
+  // Close ancestors in reverse
+  for (let i = ancestors.length - 1; i >= 0; i--) {
+    const anc = ancestors[i];
+    const loc = anc.sourceCodeLocation!;
+    const indent = "  ".repeat(i);
+    result += indent + html.slice(loc.endTag!.startOffset, loc.endTag!.endOffset) + "\n";
+  }
+
+  return result.trimEnd();
+}
+
+export function headContainsUrl(html: string, url: string): boolean {
+  return html.includes(`src="${url}"`) || html.includes(`href="${url}"`);
+}
+
+export function insertIntoHead(html: string, tag: string): string {
+  const ast = parse(html, { sourceCodeLocationInfo: true });
+  const head = selectOne("head", ast.childNodes, {
+    adapter: parse5Adapter,
+  }) as Element | null;
+
+  if (!head?.sourceCodeLocation?.endTag) {
+    throw new Error("No <head> found in HTML");
+  }
+
+  const endTagOffset = head.sourceCodeLocation.endTag.startOffset;
+  const indent = detectIndentation(html, endTagOffset) || "  ";
+  return html.slice(0, endTagOffset) + indent + tag + "\n" + html.slice(endTagOffset);
 }
 
 export function getPages(projectDir: string): string[] {

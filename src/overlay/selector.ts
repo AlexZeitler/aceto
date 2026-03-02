@@ -6,11 +6,25 @@ import {
   showSelection,
   hideSelection,
   setUserSelector,
+  getModeToggleButton,
+  updateModeIndicator,
 } from "./highlight";
 import { initDepthNavigation, clearDepthNavigation } from "./depth";
 
 let selectedElement: Element | null = null;
 let selectMode = true;
+
+export function toggleSelectMode() {
+  selectMode = !selectMode;
+  updateModeIndicator(selectMode);
+  if (!selectMode) {
+    hideHover();
+  }
+}
+
+export function isSelectMode(): boolean {
+  return selectMode;
+}
 
 function isOverlayElement(el: Element): boolean {
   let current: Element | null = el;
@@ -116,6 +130,16 @@ export function setSelectedElement(el: Element | null) {
 function init() {
   initHighlightHost();
 
+  // Set up mode toggle button
+  const toggleBtn = getModeToggleButton();
+  if (toggleBtn) {
+    toggleBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleSelectMode();
+    });
+  }
+
   // Prevent all default interactions in select mode
   const blockEvents = ["click", "mousedown", "mouseup", "submit", "keydown", "keypress", "keyup", "contextmenu", "dblclick"];
 
@@ -180,10 +204,7 @@ function init() {
   // Toggle select mode with Alt key
   document.addEventListener("keydown", (e) => {
     if (e.key === "Alt") {
-      selectMode = !selectMode;
-      if (!selectMode) {
-        hideHover();
-      }
+      toggleSelectMode();
     }
   });
 }

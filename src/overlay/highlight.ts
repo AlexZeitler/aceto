@@ -7,6 +7,7 @@ let breadcrumbUserSpan: HTMLElement | null = null;
 let breadcrumbAgentSpan: HTMLElement | null = null;
 let breadcrumbPathSpan: HTMLElement | null = null;
 let agentHighlightContainer: HTMLElement | null = null;
+let modeToggleButton: HTMLElement | null = null;
 
 let currentUserSelector = "";
 let currentAgentSelector = "";
@@ -115,6 +116,27 @@ export function initHighlightHost(): ShadowRoot {
       overflow: hidden;
       text-overflow: ellipsis;
     }
+    .aceto-mode-toggle {
+      pointer-events: auto;
+      cursor: pointer;
+      padding: 2px 8px;
+      border-radius: 3px;
+      border: 1px solid transparent;
+      font: 11px/1.4 ui-monospace, monospace;
+      color: #e2e8f0;
+      white-space: nowrap;
+      margin-left: auto;
+      user-select: none;
+    }
+    .aceto-mode-toggle:hover {
+      border-color: #475569;
+    }
+    .aceto-mode-select {
+      background: #1e40af;
+    }
+    .aceto-mode-preview {
+      background: #15803d;
+    }
   `;
   shadowRoot.appendChild(style);
 
@@ -157,6 +179,12 @@ export function initHighlightHost(): ShadowRoot {
   sep.textContent = "|";
   breadcrumbBar.appendChild(sep);
   breadcrumbBar.appendChild(breadcrumbPathSpan);
+
+  // Mode toggle button
+  modeToggleButton = document.createElement("button");
+  modeToggleButton.className = "aceto-mode-toggle aceto-mode-select";
+  modeToggleButton.textContent = "Select";
+  breadcrumbBar.appendChild(modeToggleButton);
 
   shadowRoot.appendChild(breadcrumbBar);
 
@@ -347,6 +375,21 @@ function buildSelectorPath(selector: string): string {
     return parts.join(" > ");
   } catch {
     return selector;
+  }
+}
+
+export function getModeToggleButton(): HTMLElement | null {
+  return modeToggleButton;
+}
+
+export function updateModeIndicator(isSelectMode: boolean) {
+  if (!modeToggleButton) return;
+  if (isSelectMode) {
+    modeToggleButton.textContent = "Select";
+    modeToggleButton.className = "aceto-mode-toggle aceto-mode-select";
+  } else {
+    modeToggleButton.textContent = "Preview";
+    modeToggleButton.className = "aceto-mode-toggle aceto-mode-preview";
   }
 }
 

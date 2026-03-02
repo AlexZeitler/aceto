@@ -59,6 +59,54 @@ export function registerTools(server: McpServer, state: AppState) {
     },
   );
 
+  server.tool(
+    "get_element_with_context",
+    "Returns an element with its ancestor context. More token-efficient than get_current_page() for large pages. Ancestors are shown with '...' placeholders for siblings.",
+    {
+      selector: z.string().describe("CSS selector of the target element"),
+      depth: z.number().optional().describe("Number of ancestor levels to include (default: 0 = element only)"),
+    },
+    async ({ selector, depth }) => {
+      try {
+        return toolResult(await htmlOps.getElementWithContext(state, selector, depth));
+      } catch (e: any) {
+        return toolError(e);
+      }
+    },
+  );
+
+  server.tool(
+    "create_page",
+    "Create a new HTML page in the project. If no HTML is provided, creates a minimal page with Tailwind CDN.",
+    {
+      path: z.string().describe("URL path for the new page (e.g. /login, /dashboard/settings)"),
+      html: z.string().optional().describe("Optional HTML content. If omitted, creates a minimal Tailwind page."),
+    },
+    async ({ path, html }) => {
+      try {
+        return toolResult(await htmlOps.createPage(state, path, html));
+      } catch (e: any) {
+        return toolError(e);
+      }
+    },
+  );
+
+  server.tool(
+    "add_library",
+    "Add a CSS or JavaScript library via CDN URL to the current page's <head>. Auto-detects type from URL extension.",
+    {
+      url: z.string().describe("CDN URL of the library"),
+      type: z.enum(["css", "script"]).optional().describe("Force type: 'css' for <link>, 'script' for <script>. Auto-detected from URL if omitted."),
+    },
+    async ({ url, type }) => {
+      try {
+        return toolResult(await htmlOps.addLibrary(state, url, type));
+      } catch (e: any) {
+        return toolError(e);
+      }
+    },
+  );
+
   // --- Write Tools ---
 
   server.tool(
@@ -281,6 +329,22 @@ export function registerTools(server: McpServer, state: AppState) {
     },
     async ({ selector }) => {
       return toolResult(htmlOps.scrollTo(state, selector));
+    },
+  );
+
+  server.tool(
+    "get_screenshot",
+    "Capture a screenshot of the current page or a specific element. Saves to .aceto/screenshots/ in the project directory. Returns the file path. Use the Read tool to view the image.",
+    {
+      selector: z.string().optional().describe("CSS selector to screenshot a specific element. If omitted, captures the full page."),
+    },
+    async ({ selector }) => {
+      try {
+        const result = await htmlOps.getScreenshot(state, selector);
+        return toolResult(result);
+      } catch (e: any) {
+        return toolError(e);
+      }
     },
   );
 }

@@ -63,6 +63,7 @@ export interface AppState {
   wsClients: Set<ServerWebSocket<unknown>>;
   fileHistories: Map<string, FileHistory>;
   selectionHistory: SelectionHistoryEntry[];
+  activeClient: ServerWebSocket<unknown> | null;
 }
 
 const MAX_SELECTION_HISTORY = 20;
@@ -99,5 +100,6 @@ export function createState(opts: {
     wsClients: new Set(),
     fileHistories: new Map(),
     selectionHistory: [],
+    activeClient: null,
   };
 }

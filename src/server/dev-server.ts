@@ -78,14 +78,20 @@ interface WsReadyMessage {
   type: "ready";
 }
 
-type WsMessage = WsSelectMessage | WsNavigateMessage | WsReadyMessage;
+interface WsDeselectMessage {
+  type: "deselect";
+}
+
+type WsMessage = WsSelectMessage | WsNavigateMessage | WsReadyMessage | WsDeselectMessage;
 
 function handleWsMessage(
   state: AppState,
   data: WsMessage,
+  ws: import("bun").ServerWebSocket<unknown>,
 ) {
   switch (data.type) {
     case "select": {
+      state.activeClient = ws;
       const selection: SelectionData = {
         selector: data.selector,
         html: data.html,
@@ -103,6 +109,10 @@ function handleWsMessage(
       log(`Selection: ${data.selector}`);
       break;
     }
+    case "deselect":
+      state.currentSelection = null;
+      log("Deselected");
+      break;
     case "ready":
       log("Browser ready");
       break;
@@ -142,11 +152,12 @@ export function startDevServer(state: AppState) {
 
       // For HTML files: inject overlay and track current page
       if (ext === ".html") {
+        const noOverlay = url.searchParams.has("__aceto_no_overlay");
         const rawHtml = Bun.file(filePath).text();
         return rawHtml.then((html) => {
           state.currentPage = url.pathname;
-          const injectedHtml = injectOverlay(html, state.port);
-          return new Response(injectedHtml, {
+          const responseHtml = noOverlay ? html : injectOverlay(html, state.port);
+          return new Response(responseHtml, {
             headers: { "Content-Type": contentType },
           });
         });
@@ -165,13 +176,16 @@ export function startDevServer(state: AppState) {
       message(ws, message) {
         try {
           const data = JSON.parse(message as string) as WsMessage;
-          handleWsMessage(state, data);
+          handleWsMessage(state, data, ws);
         } catch (e) {
           log("Invalid WS message:", message);
         }
       },
       close(ws) {
         state.wsClients.delete(ws);
+        if (state.activeClient === ws) {
+          state.activeClient = null;
+        }
         log(`Client disconnected (${state.wsClients.size} total)`);
       },
     },

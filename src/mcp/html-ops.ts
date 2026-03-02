@@ -1,10 +1,18 @@
-import { readFile, writeFile } from "fs/promises";
+import { readFile, writeFile, mkdir } from "fs/promises";
+import { existsSync } from "fs";
 import path from "path";
 import type { AppState } from "../state";
 import { getFileHistory } from "../state";
 import * as parser from "../utils/html-parser";
 import type { InsertPosition } from "../utils/html-parser";
 import { broadcast } from "../server/dev-server";
+import { INIT_HTML } from "../cli";
+
+function validateSelector(selector: string) {
+  if (!selector || !selector.trim()) {
+    throw new Error("Selector must not be empty");
+  }
+}
 
 function resolveCurrentFile(state: AppState): string {
   let pagePath = state.currentPage;
@@ -77,6 +85,69 @@ export function getSelectionHistory(state: AppState, n?: number) {
   return history;
 }
 
+// --- Get Element With Context ---
+
+export async function getElementWithContext(
+  state: AppState,
+  selector: string,
+  depth?: number,
+) {
+  validateSelector(selector);
+  const filePath = resolveCurrentFile(state);
+  const html = await readFile(filePath, "utf-8");
+  const contextHtml = parser.extractElementWithContext(html, selector, depth ?? 0);
+  return { selector, depth: depth ?? 0, html: contextHtml };
+}
+
+// --- Create Page ---
+
+export async function createPage(state: AppState, pagePath: string, html?: string) {
+  // Normalize path
+  let normalized = pagePath.startsWith("/") ? pagePath : "/" + pagePath;
+  if (!normalized.endsWith(".html")) normalized += ".html";
+
+  const filePath = path.join(state.projectDir, normalized);
+
+  // Path traversal check
+  if (!filePath.startsWith(state.projectDir)) {
+    throw new Error("Path traversal not allowed");
+  }
+
+  if (existsSync(filePath)) {
+    throw new Error(`Page already exists: ${normalized}`);
+  }
+
+  // Create directories if needed
+  const dir = path.dirname(filePath);
+  await mkdir(dir, { recursive: true });
+
+  await writeFile(filePath, html ?? INIT_HTML, "utf-8");
+  return { success: true, file: normalized.slice(1), path: normalized.replace(/\.html$/, "").replace(/\/index$/, "") || "/" };
+}
+
+// --- Add Library ---
+
+export async function addLibrary(state: AppState, url: string, type?: "css" | "script") {
+  const filePath = resolveCurrentFile(state);
+  const html = await readFile(filePath, "utf-8");
+
+  if (parser.headContainsUrl(html, url)) {
+    throw new Error(`Library already included: ${url}`);
+  }
+
+  // Auto-detect type from URL extension
+  const detectedType = type ?? (url.endsWith(".css") ? "css" : "script");
+  const tag = detectedType === "css"
+    ? `<link href="${url}" rel="stylesheet">`
+    : `<script src="${url}"></script>`;
+
+  const newHtml = parser.insertIntoHead(html, tag);
+  await writeWithHistory(state, filePath, html, newHtml);
+  // Head changes need full reload, not morph
+  broadcast(state, { type: "reload" });
+  return { success: true, type: detectedType, url };
+}
+
 // --- Write Operations ---
 
 export async function replacePage(state: AppState, newBodyHtml: string) {
@@ -93,6 +164,7 @@ export async function replaceElement(
   selector: string,
   newElementHtml: string,
 ) {
+  validateSelector(selector);
   const filePath = resolveCurrentFile(state);
   const html = await readFile(filePath, "utf-8");
   const newHtml = parser.replaceElement(html, selector, newElementHtml);
@@ -107,6 +179,7 @@ export async function updateClasses(
   add: string[],
   remove: string[],
 ) {
+  validateSelector(selector);
   const filePath = resolveCurrentFile(state);
   const html = await readFile(filePath, "utf-8");
   const newHtml = parser.updateClasses(html, selector, add, remove);
@@ -121,6 +194,7 @@ export async function insertElement(
   position: InsertPosition,
   newHtml: string,
 ) {
+  validateSelector(selector);
   const filePath = resolveCurrentFile(state);
   const html = await readFile(filePath, "utf-8");
   const result = parser.insertElement(html, selector, position, newHtml);
@@ -130,6 +204,7 @@ export async function insertElement(
 }
 
 export async function deleteElement(state: AppState, selector: string) {
+  validateSelector(selector);
   const filePath = resolveCurrentFile(state);
   const html = await readFile(filePath, "utf-8");
   const newHtml = parser.deleteElement(html, selector);
@@ -143,6 +218,7 @@ export async function updateText(
   selector: string,
   text: string,
 ) {
+  validateSelector(selector);
   const filePath = resolveCurrentFile(state);
   const html = await readFile(filePath, "utf-8");
   const newHtml = parser.updateText(html, selector, text);
@@ -157,6 +233,7 @@ export async function updateAttribute(
   attr: string,
   value: string,
 ) {
+  validateSelector(selector);
   const filePath = resolveCurrentFile(state);
   const html = await readFile(filePath, "utf-8");
   const newHtml = parser.updateAttribute(html, selector, attr, value);
@@ -219,4 +296,16 @@ export function navigateTo(state: AppState, navPath: string) {
 export function scrollTo(state: AppState, selector: string) {
   broadcast(state, { type: "scroll_to", selector });
   return { success: true, selector };
+}
+
+// --- Screenshot ---
+
+export async function getScreenshot(state: AppState, selector?: string) {
+  const { captureScreenshot } = await import("../screenshot");
+  let pagePath = state.currentPage;
+  if (pagePath === "/") pagePath = "";
+  const url = `http://localhost:${state.port}${pagePath}?__aceto_no_overlay`;
+  const effectiveSelector = selector ?? state.currentSelection?.selector;
+  const filePath = await captureScreenshot(url, state.projectDir, effectiveSelector);
+  return { filePath, selector: effectiveSelector ?? null };
 }
