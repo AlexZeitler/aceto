@@ -492,6 +492,13 @@ function init() {
           return;
         }
 
+        // "e" to toggle select/preview mode (not during editing)
+        if (eventName === "keydown" && (e as KeyboardEvent).key === "e" && !isEditing()) {
+          e.stopPropagation();
+          toggleSelectMode();
+          return;
+        }
+
         // DEL to delete selected element
         if (eventName === "keydown" && (e as KeyboardEvent).key === "Delete") {
           if (selectedElement) {
@@ -591,9 +598,13 @@ function init() {
     }
   }, { capture: true, passive: true });
 
-  // Toggle select mode with Alt key
+  // Toggle select mode with Alt key (works in both modes)
+  // "e" is handled in blockEvents (select mode) and here (preview mode)
   document.addEventListener("keydown", (e) => {
     if (e.key === "Alt") {
+      toggleSelectMode();
+    }
+    if (e.key === "e" && !selectMode && !isEditing()) {
       toggleSelectMode();
     }
   });
