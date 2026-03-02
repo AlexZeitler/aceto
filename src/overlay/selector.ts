@@ -13,6 +13,8 @@ import { initDepthNavigation, clearDepthNavigation } from "./depth";
 
 let selectedElement: Element | null = null;
 let selectMode = true;
+let editingElement: HTMLElement | null = null;
+let editOriginalText: string = "";
 
 export function toggleSelectMode() {
   selectMode = !selectMode;
@@ -164,12 +166,102 @@ export function setSelectedElement(el: Element | null) {
   }
 }
 
+// --- Inline Text Editing ---
+
+const EDITABLE_TAGS = new Set([
+  "p", "h1", "h2", "h3", "h4", "h5", "h6",
+  "span", "a", "li", "td", "th", "label", "button",
+  "dt", "dd", "figcaption", "blockquote", "cite", "em", "strong", "b", "i", "u", "small",
+]);
+
+function isEditableElement(el: Element): boolean {
+  const tag = el.tagName.toLowerCase();
+  if (EDITABLE_TAGS.has(tag)) return true;
+
+  // Also allow elements whose children are only text or inline elements
+  const children = el.childNodes;
+  if (children.length === 0) return false;
+  for (const child of Array.from(children)) {
+    if (child.nodeType === Node.TEXT_NODE) continue;
+    if (child.nodeType === Node.ELEMENT_NODE) {
+      const childTag = (child as Element).tagName.toLowerCase();
+      const inlineTags = new Set(["span", "a", "em", "strong", "b", "i", "u", "small", "br", "code", "mark", "sub", "sup"]);
+      if (!inlineTags.has(childTag)) return false;
+    } else {
+      return false;
+    }
+  }
+  return children.length > 0;
+}
+
+function startEditing(el: HTMLElement) {
+  if (editingElement) return;
+  editingElement = el;
+  editOriginalText = el.textContent || "";
+
+  el.contentEditable = "true";
+  el.focus();
+
+  // Select all text
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  const sel = window.getSelection();
+  sel?.removeAllRanges();
+  sel?.addRange(range);
+
+  // Visual feedback: dashed outline
+  el.style.outline = "2px dashed #f43f5e";
+  el.style.outlineOffset = "-1px";
+
+  hideHover();
+}
+
+function commitEdit() {
+  if (!editingElement) return;
+  const el = editingElement;
+  const newText = el.textContent || "";
+  el.contentEditable = "false";
+  el.style.outline = "";
+  el.style.outlineOffset = "";
+
+  if (newText !== editOriginalText) {
+    const result = generateSelector(el);
+    const fallback = generateFallbackSelector(el);
+    send({
+      type: "text_edit",
+      selector: result.selector,
+      fallbackSelector: fallback,
+      text: newText,
+    });
+  }
+
+  editingElement = null;
+  editOriginalText = "";
+}
+
+function cancelEdit() {
+  if (!editingElement) return;
+  editingElement.textContent = editOriginalText;
+  editingElement.contentEditable = "false";
+  editingElement.style.outline = "";
+  editingElement.style.outlineOffset = "";
+  editingElement = null;
+  editOriginalText = "";
+}
+
+function isEditing(): boolean {
+  return editingElement !== null;
+}
+
 function init() {
   initHighlightHost();
 
   // Set up mode toggle button
   const toggleBtn = getModeToggleButton();
   if (toggleBtn) {
+    toggleBtn.addEventListener("mousedown", (e) => {
+      e.preventDefault(); // Prevent button from receiving focus
+    });
     toggleBtn.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -178,7 +270,7 @@ function init() {
   }
 
   // Prevent all default interactions in select mode
-  const blockEvents = ["click", "mousedown", "mouseup", "submit", "keydown", "keypress", "keyup", "contextmenu", "dblclick"];
+  const blockEvents = ["click", "mousedown", "mouseup", "submit", "keydown", "keypress", "keyup", "contextmenu"];
 
   for (const eventName of blockEvents) {
     document.addEventListener(
@@ -186,6 +278,33 @@ function init() {
       (e) => {
         if (!selectMode) return;
         if (isOverlayElement(e.target as Element)) return;
+
+        // While editing, allow normal keyboard/mouse interaction in the edited element
+        if (isEditing()) {
+          const target = e.target as Element;
+          if (editingElement && (editingElement === target || editingElement.contains(target))) {
+            // Handle Enter and Escape during editing
+            if (eventName === "keydown") {
+              const key = (e as KeyboardEvent).key;
+              if (key === "Enter" && !(e as KeyboardEvent).shiftKey) {
+                e.preventDefault();
+                commitEdit();
+                return;
+              }
+              if (key === "Escape") {
+                e.preventDefault();
+                cancelEdit();
+                return;
+              }
+            }
+            // Let other events through to the editing element
+            return;
+          }
+          // Click outside the editing element → commit
+          if (eventName === "click" || eventName === "mousedown") {
+            commitEdit();
+          }
+        }
 
         // ESC to deselect
         if (eventName === "keydown" && (e as KeyboardEvent).key === "Escape") {
@@ -218,11 +337,47 @@ function init() {
     );
   }
 
+  // Double-click handler for inline text editing
+  document.addEventListener(
+    "dblclick",
+    (e) => {
+      if (!selectMode) return;
+      if (isOverlayElement(e.target as Element)) return;
+      if (isEditing()) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      const target = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+      if (!target || isOverlayElement(target)) return;
+
+      if (isEditableElement(target)) {
+        startEditing(target);
+      }
+    },
+    true,
+  );
+
+  // Blur handler for editing — commit on focus loss
+  document.addEventListener(
+    "focusout",
+    (e) => {
+      if (!isEditing()) return;
+      if (editingElement && e.target === editingElement) {
+        // Small delay to allow click-outside to be handled first
+        setTimeout(() => {
+          if (isEditing()) commitEdit();
+        }, 100);
+      }
+    },
+    true,
+  );
+
   // Hover highlighting
   document.addEventListener(
     "mousemove",
     (e) => {
-      if (!selectMode) {
+      if (!selectMode || isEditing()) {
         hideHover();
         return;
       }

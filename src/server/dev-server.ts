@@ -2,10 +2,10 @@ import { existsSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
 import { log } from "../utils/log";
 import type { AppState, SelectionData } from "../state";
-import { pushSelectionHistory, getNextMid } from "../state";
+import { pushSelectionHistory, getNextMid, getFileHistory } from "../state";
 import { injectOverlay } from "./inject";
 import { handleMcpRequest } from "../mcp/server";
-import { addDataMid } from "../utils/html-parser";
+import { addDataMid, updateText } from "../utils/html-parser";
 
 const MIME_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -85,7 +85,14 @@ interface WsDeselectMessage {
   type: "deselect";
 }
 
-type WsMessage = WsSelectMessage | WsNavigateMessage | WsReadyMessage | WsDeselectMessage;
+interface WsTextEditMessage {
+  type: "text_edit";
+  selector: string;
+  fallbackSelector?: string;
+  text: string;
+}
+
+type WsMessage = WsSelectMessage | WsNavigateMessage | WsReadyMessage | WsDeselectMessage | WsTextEditMessage;
 
 function handleWsMessage(
   state: AppState,
@@ -95,6 +102,14 @@ function handleWsMessage(
   switch (data.type) {
     case "select": {
       state.activeClient = ws;
+
+      // Sync nextMid counter with browser-assigned mids
+      if (data.dataMid) {
+        const num = parseInt(data.dataMid.slice(1), 10);
+        if (num >= state.nextMid) {
+          state.nextMid = num + 1;
+        }
+      }
 
       // Persist data-mid to HTML file if browser assigned a new one
       if (data.dataMid && data.fallbackSelector) {
@@ -134,6 +149,24 @@ function handleWsMessage(
       state.currentPage = data.path;
       log(`Navigate: ${data.path}`);
       break;
+    case "text_edit": {
+      try {
+        const filePath = resolveCurrentFilePath(state);
+        const html = readFileSync(filePath, "utf-8");
+        // Prefer fallback selector (structural path) over data-mid which may have duplicates
+        const selector = data.fallbackSelector || data.selector;
+        const newHtml = updateText(html, selector, data.text);
+        if (newHtml !== html) {
+          const history = getFileHistory(state, filePath);
+          history.push(html);
+          writeFileSync(filePath, newHtml, "utf-8");
+          log(`Text edit: ${selector} → "${data.text.slice(0, 50)}"`);
+        }
+      } catch (e: any) {
+        log(`Text edit failed: ${e.message}`);
+      }
+      break;
+    }
   }
 }
 
@@ -207,6 +240,7 @@ export function startDevServer(state: AppState) {
       open(ws) {
         state.wsClients.add(ws);
         ws.send(JSON.stringify({ type: "mid_counter", value: state.nextMid }));
+        ws.send(JSON.stringify({ type: "config", twDebug: state.twDebug }));
         log(`Client connected (${state.wsClients.size} total)`);
       },
       message(ws, message) {

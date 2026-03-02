@@ -87,15 +87,53 @@ function parseArgs() {
   for (let i = 1; i < args.length; i++) {
     if (args[i].startsWith("--")) {
       const key = args[i].slice(2);
-      flags[key] = args[i + 1] ?? "true";
-      i++;
+      const next = args[i + 1];
+      if (next && !next.startsWith("--")) {
+        flags[key] = next;
+        i++;
+      } else {
+        flags[key] = "true";
+      }
     }
   }
 
   return { command, flags };
 }
 
-async function init() {
+const VALID_TW_DEBUG_POSITIONS = ["tl", "bl", "tr", "br"];
+
+function parseTwDebugFlag(flags: Record<string, string>): string | null {
+  if (!("tw-debug" in flags)) return null;
+  const val = flags["tw-debug"];
+  if (val === "true") return "bl"; // --tw-debug without value
+  if (VALID_TW_DEBUG_POSITIONS.includes(val)) return val;
+  log(`Warning: Invalid --tw-debug position "${val}". Using "bl".`);
+  return "bl";
+}
+
+interface AcetoConfig {
+  twDebug?: string | null;
+}
+
+async function readConfig(projectDir: string): Promise<AcetoConfig> {
+  const configPath = `${projectDir}/.aceto/config.json`;
+  try {
+    const file = Bun.file(configPath);
+    if (await file.exists()) {
+      return await file.json();
+    }
+  } catch {}
+  return {};
+}
+
+async function writeConfig(projectDir: string, config: AcetoConfig) {
+  const dir = `${projectDir}/.aceto`;
+  const { mkdirSync } = await import("fs");
+  mkdirSync(dir, { recursive: true });
+  await Bun.write(`${dir}/config.json`, JSON.stringify(config, null, 2) + "\n");
+}
+
+async function init(twDebug: string | null) {
   const htmlPath = `${process.cwd()}/index.html`;
   const htmlExists = await Bun.file(htmlPath).exists();
   if (htmlExists) {
@@ -113,10 +151,14 @@ async function init() {
     await Bun.write(mdPath, ACETO_MD_TEMPLATE);
     log("Created aceto.md");
   }
+
+  if (twDebug) {
+    await writeConfig(process.cwd(), { twDebug });
+    log(`Created .aceto/config.json (twDebug: "${twDebug}")`);
+  }
 }
 
-async function dev(port: number) {
-  // Implemented in Chunk 8
+async function dev(port: number, twDebugFlag: string | null) {
   log(`Starting dev server on port ${port}...`);
 
   const { buildOverlay } = await import("./server/inject");
@@ -127,9 +169,14 @@ async function dev(port: number) {
 
   const { scanDataMids } = await import("./utils/html-parser");
 
+  // Resolve twDebug: CLI flag overrides config file, default "bl"
+  const config = await readConfig(process.cwd());
+  const twDebug = twDebugFlag ?? config.twDebug ?? "bl";
+
   const state = createState({
     projectDir: process.cwd(),
     port,
+    twDebug,
   });
 
   state.nextMid = scanDataMids(state.projectDir);
@@ -149,6 +196,9 @@ async function dev(port: number) {
   log(`  Preview:  http://localhost:${port}`);
   log(`  MCP:      http://localhost:${port}/mcp`);
   log(`  Pages:    ${files.length} (${files.join(", ")})`);
+  if (twDebug) {
+    log(`  Debug:    Tailwind breakpoints (${twDebug})`);
+  }
   log("");
   log("  Watching for changes...");
 }
@@ -166,12 +216,15 @@ async function main() {
   const { command, flags } = parseArgs();
 
   switch (command) {
-    case "init":
-      await init();
+    case "init": {
+      const twDebug = parseTwDebugFlag(flags);
+      await init(twDebug);
       break;
+    }
     case "dev": {
       const port = flags.port ? parseInt(flags.port, 10) : 3000;
-      await dev(port);
+      const twDebug = parseTwDebugFlag(flags);
+      await dev(port, twDebug);
       break;
     }
     case "export": {
@@ -193,7 +246,8 @@ async function main() {
       log("  export --production   Export with Tailwind CSS build");
       log("");
       log("Options:");
-      log("  --port  Dev server port (default: 3000)");
+      log("  --port      Dev server port (default: 3000)");
+      log("  --tw-debug  Show Tailwind breakpoint indicator (tl|bl|tr|br, default: bl)");
       process.exit(1);
   }
 }

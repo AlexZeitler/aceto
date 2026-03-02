@@ -65,6 +65,7 @@ export interface AppState {
   selectionHistory: SelectionHistoryEntry[];
   activeClient: ServerWebSocket<unknown> | null;
   nextMid: number;
+  twDebug: string | null;
 }
 
 export function getNextMid(state: AppState): string {
@@ -98,6 +99,7 @@ export function getFileHistory(state: AppState, filePath: string): FileHistory {
 export function createState(opts: {
   projectDir: string;
   port: number;
+  twDebug?: string | null;
 }): AppState {
   return {
     projectDir: opts.projectDir,
@@ -109,5 +111,6 @@ export function createState(opts: {
     selectionHistory: [],
     activeClient: null,
     nextMid: 1,
+    twDebug: opts.twDebug ?? null,
   };
 }

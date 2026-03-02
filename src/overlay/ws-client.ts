@@ -4,7 +4,9 @@ import {
   showAgentHighlights,
   clearAgentHighlights,
   flashElement,
+  initHighlightHost,
 } from "./highlight";
+import { initDebugScreens } from "./debug-screens";
 
 type MessageHandler = (data: any) => void;
 
@@ -99,6 +101,17 @@ let midCounter = 1;
 
 on("mid_counter", (data) => {
   midCounter = data.value;
+});
+
+// Config from server (sent on connect)
+let configReceived = false;
+on("config", (data) => {
+  if (configReceived) return;
+  configReceived = true;
+  if (data.twDebug) {
+    const shadowRoot = initHighlightHost();
+    initDebugScreens(shadowRoot, data.twDebug);
+  }
 });
 
 export function getNextMid(): string {
