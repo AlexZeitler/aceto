@@ -1,10 +1,11 @@
-import { existsSync } from "fs";
+import { existsSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
 import { log } from "../utils/log";
 import type { AppState, SelectionData } from "../state";
-import { pushSelectionHistory } from "../state";
+import { pushSelectionHistory, getNextMid } from "../state";
 import { injectOverlay } from "./inject";
 import { handleMcpRequest } from "../mcp/server";
+import { addDataMid } from "../utils/html-parser";
 
 const MIME_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -59,6 +60,8 @@ interface WsSelectMessage {
   type: "select";
   selector: string;
   html: string;
+  dataMid?: string;
+  fallbackSelector?: string;
   meta: {
     tag: string;
     classes: string[];
@@ -92,6 +95,17 @@ function handleWsMessage(
   switch (data.type) {
     case "select": {
       state.activeClient = ws;
+
+      // Persist data-mid to HTML file if browser assigned a new one
+      if (data.dataMid && data.fallbackSelector) {
+        persistDataMid(state, data.fallbackSelector, data.dataMid);
+      } else if (!data.dataMid && !data.selector.startsWith("#") && !data.selector.startsWith("[data-mid=")) {
+        // Server fallback: assign data-mid if browser didn't
+        const mid = getNextMid(state);
+        persistDataMid(state, data.selector, mid);
+        data.selector = `[data-mid="${mid}"]`;
+      }
+
       const selection: SelectionData = {
         selector: data.selector,
         html: data.html,
@@ -120,6 +134,27 @@ function handleWsMessage(
       state.currentPage = data.path;
       log(`Navigate: ${data.path}`);
       break;
+  }
+}
+
+function resolveCurrentFilePath(state: AppState): string {
+  let pagePath = state.currentPage;
+  if (pagePath === "/") pagePath = "/index.html";
+  else if (!pagePath.endsWith(".html")) pagePath += ".html";
+  return path.join(state.projectDir, pagePath);
+}
+
+function persistDataMid(state: AppState, fallbackSelector: string, mid: string) {
+  try {
+    const filePath = resolveCurrentFilePath(state);
+    const html = readFileSync(filePath, "utf-8");
+    const newHtml = addDataMid(html, fallbackSelector, mid);
+    if (newHtml !== html) {
+      writeFileSync(filePath, newHtml, "utf-8");
+      log(`Persisted data-mid="${mid}" via ${fallbackSelector}`);
+    }
+  } catch (e: any) {
+    log(`Failed to persist data-mid: ${e.message}`);
   }
 }
 
@@ -171,6 +206,7 @@ export function startDevServer(state: AppState) {
     websocket: {
       open(ws) {
         state.wsClients.add(ws);
+        ws.send(JSON.stringify({ type: "mid_counter", value: state.nextMid }));
         log(`Client connected (${state.wsClients.size} total)`);
       },
       message(ws, message) {

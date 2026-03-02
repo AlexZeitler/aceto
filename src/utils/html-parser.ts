@@ -117,8 +117,16 @@ export function replaceElement(
   const info = findElement(html, selector);
   if (!info) throw new SelectorNotFoundError(selector, html);
 
+  // Preserve data-mid from old element if new HTML doesn't have one
+  const oldMid = info.element.attrs.find((a) => a.name === "data-mid");
+  let finalHtml = newHtml;
+  if (oldMid && !newHtml.includes("data-mid=")) {
+    // Inject data-mid into the new HTML's opening tag
+    finalHtml = newHtml.replace(/^(<\w+)/, `$1 data-mid="${oldMid.value}"`);
+  }
+
   const indent = detectIndentation(html, info.startOffset);
-  const indentedHtml = indentHtml(newHtml, indent);
+  const indentedHtml = indentHtml(finalHtml, indent);
 
   return (
     html.slice(0, info.startOffset) + indentedHtml + html.slice(info.endOffset)
@@ -396,6 +404,47 @@ export function insertIntoHead(html: string, tag: string): string {
   const endTagOffset = head.sourceCodeLocation.endTag.startOffset;
   const indent = detectIndentation(html, endTagOffset) || "  ";
   return html.slice(0, endTagOffset) + indent + tag + "\n" + html.slice(endTagOffset);
+}
+
+export function addDataMid(
+  html: string,
+  fallbackSelector: string,
+  mid: string,
+): string {
+  const info = findElement(html, fallbackSelector);
+  if (!info) return html;
+
+  // Check if element already has data-mid
+  const existing = info.element.attrs.find((a) => a.name === "data-mid");
+  if (existing) return html;
+
+  // Insert data-mid after tag name
+  const startTag = info.element.sourceCodeLocation!.startTag!;
+  const tagStart = startTag.startOffset;
+  const afterTagName = tagStart + 1 + info.element.tagName.length;
+  return (
+    html.slice(0, afterTagName) +
+    ` data-mid="${mid}"` +
+    html.slice(afterTagName)
+  );
+}
+
+export function scanDataMids(projectDir: string): number {
+  const glob = new Bun.Glob("**/*.html");
+  let maxMid = 0;
+  for (const file of glob.scanSync({ cwd: projectDir })) {
+    if (file.startsWith("dist/") || file.startsWith("node_modules/")) continue;
+    const content = require("fs").readFileSync(
+      require("path").join(projectDir, file),
+      "utf-8",
+    );
+    const matches = content.matchAll(/data-mid="m(\d+)"/g);
+    for (const match of matches) {
+      const num = parseInt(match[1], 10);
+      if (num > maxMid) maxMid = num;
+    }
+  }
+  return maxMid + 1;
 }
 
 export function getPages(projectDir: string): string[] {

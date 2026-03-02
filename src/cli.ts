@@ -125,10 +125,14 @@ async function dev(port: number) {
   const { startFileWatcher } = await import("./server/file-watcher");
   const { startMcpServer } = await import("./mcp/server");
 
+  const { scanDataMids } = await import("./utils/html-parser");
+
   const state = createState({
     projectDir: process.cwd(),
     port,
   });
+
+  state.nextMid = scanDataMids(state.projectDir);
 
   await buildOverlay();
 

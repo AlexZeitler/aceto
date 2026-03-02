@@ -1,4 +1,4 @@
-import { send } from "./ws-client";
+import { send, getNextMid } from "./ws-client";
 import {
   initHighlightHost,
   showHover,
@@ -35,7 +35,13 @@ function isOverlayElement(el: Element): boolean {
   return false;
 }
 
-function generateSelector(el: Element): string {
+interface SelectorResult {
+  selector: string;
+  dataMid?: string;
+  fallbackSelector?: string;
+}
+
+function generateFallbackSelector(el: Element): string {
   if (el.id) return `#${CSS.escape(el.id)}`;
 
   const parts: string[] = [];
@@ -67,6 +73,30 @@ function generateSelector(el: Element): string {
   return parts.join(" > ");
 }
 
+function generateSelector(el: Element): SelectorResult {
+  // Prefer existing data-mid
+  const existingMid = el.getAttribute("data-mid");
+  if (existingMid) {
+    return { selector: `[data-mid="${existingMid}"]` };
+  }
+
+  // Prefer existing ID
+  if (el.id) {
+    return { selector: `#${CSS.escape(el.id)}` };
+  }
+
+  // Assign new data-mid
+  const mid = getNextMid();
+  el.setAttribute("data-mid", mid);
+  const fallbackSelector = generateFallbackSelector(el);
+
+  return {
+    selector: `[data-mid="${mid}"]`,
+    dataMid: mid,
+    fallbackSelector,
+  };
+}
+
 function getElementMeta(el: Element) {
   const rect = el.getBoundingClientRect();
   const parent = el.parentElement;
@@ -84,7 +114,7 @@ function getElementMeta(el: Element) {
     tag: el.tagName.toLowerCase(),
     classes: Array.from(el.classList),
     text: (el.textContent || "").trim().slice(0, 200),
-    parentSelector: parent ? generateSelector(parent) : "",
+    parentSelector: parent ? generateFallbackSelector(parent) : "",
     siblings: { before: siblingsBefore, after: siblingsAfter },
     dimensions: {
       width: Math.round(rect.width),
@@ -98,16 +128,17 @@ function selectElement(el: Element) {
   showSelection(el);
   hideHover();
 
-  const selector = generateSelector(el);
+  const result = generateSelector(el);
   const meta = getElementMeta(el);
 
-  setUserSelector(selector);
+  setUserSelector(result.selector);
 
   send({
     type: "select",
-    selector,
+    selector: result.selector,
     html: el.outerHTML,
     meta,
+    ...(result.dataMid ? { dataMid: result.dataMid, fallbackSelector: result.fallbackSelector } : {}),
   });
 }
 
@@ -119,9 +150,15 @@ export function setSelectedElement(el: Element | null) {
   selectedElement = el;
   if (el) {
     showSelection(el);
-    const selector = generateSelector(el);
+    const result = generateSelector(el);
     const meta = getElementMeta(el);
-    send({ type: "select", selector, html: el.outerHTML, meta });
+    send({
+      type: "select",
+      selector: result.selector,
+      html: el.outerHTML,
+      meta,
+      ...(result.dataMid ? { dataMid: result.dataMid, fallbackSelector: result.fallbackSelector } : {}),
+    });
   } else {
     hideSelection();
   }

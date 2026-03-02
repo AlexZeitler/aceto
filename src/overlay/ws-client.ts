@@ -94,4 +94,17 @@ on("scroll_to", (data) => {
   }
 });
 
+// Mid counter sync
+let midCounter = 1;
+
+on("mid_counter", (data) => {
+  midCounter = data.value;
+});
+
+export function getNextMid(): string {
+  const mid = `m${midCounter}`;
+  midCounter++;
+  return mid;
+}
+
 connect();

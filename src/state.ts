@@ -64,6 +64,13 @@ export interface AppState {
   fileHistories: Map<string, FileHistory>;
   selectionHistory: SelectionHistoryEntry[];
   activeClient: ServerWebSocket<unknown> | null;
+  nextMid: number;
+}
+
+export function getNextMid(state: AppState): string {
+  const mid = `m${state.nextMid}`;
+  state.nextMid++;
+  return mid;
 }
 
 const MAX_SELECTION_HISTORY = 20;
@@ -101,5 +108,6 @@ export function createState(opts: {
     fileHistories: new Map(),
     selectionHistory: [],
     activeClient: null,
+    nextMid: 1,
   };
 }
