@@ -116,6 +116,14 @@ bun install -g github:alexzeitler/aceto
 
 Requires [Bun](https://bun.sh/) runtime.
 
+## MCP Setup
+
+Once `aceto dev` is running, add it as an MCP server to Claude Code:
+
+```bash
+claude mcp add aceto -s user --transport http http://localhost:3000/mcp
+```
+
 ## Getting Started
 
 ```bash
