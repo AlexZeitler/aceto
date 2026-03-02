@@ -48,7 +48,7 @@ A local dev server with a browser overlay and MCP interface for iterating on UIs
 | `a` | Open asset picker |
 | Del | Delete selected element |
 | Esc | Close modal / deselect |
-| `e` / Alt | Toggle select/preview mode |
+| `e` / Alt | Toggle select/preview mode (clears selection) |
 | Ctrl+V | Paste image |
 
 ## Bidirectional Communication
