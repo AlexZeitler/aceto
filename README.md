@@ -45,6 +45,8 @@ A local dev server with a browser overlay and MCP interface for iterating on UIs
 | Scroll wheel | Navigate depth (parent/child) |
 | Tab / Shift+Tab | Next/previous cell (during table editing) |
 | `c` | Edit CSS classes of selected element |
+| `y` | Yank (copy) selected element |
+| `p` | Paste yanked element after selection |
 | `u` | Undo |
 | `r` | Redo |
 | `a` | Open asset picker |

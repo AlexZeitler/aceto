@@ -160,6 +160,13 @@ interface WsClassEditMessage {
   remove: string[];
 }
 
+interface WsPasteElementMessage {
+  type: "paste_element";
+  selector: string;
+  fallbackSelector?: string;
+  html: string;
+}
+
 interface WsListAssetsMessage {
   type: "list_assets";
 }
@@ -169,7 +176,7 @@ interface WsPickAssetMessage {
   path: string;
 }
 
-type WsMessage = WsSelectMessage | WsMultiSelectMessage | WsNavigateMessage | WsReadyMessage | WsDeselectMessage | WsTextEditMessage | WsUndoRedoMessage | WsDeleteElementMessage | WsTableOpMessage | WsShortcutExpandMessage | WsClassEditMessage | WsListAssetsMessage | WsPickAssetMessage;
+type WsMessage = WsSelectMessage | WsMultiSelectMessage | WsNavigateMessage | WsReadyMessage | WsDeselectMessage | WsTextEditMessage | WsUndoRedoMessage | WsDeleteElementMessage | WsTableOpMessage | WsShortcutExpandMessage | WsClassEditMessage | WsPasteElementMessage | WsListAssetsMessage | WsPickAssetMessage;
 
 function handleWsMessage(
   state: AppState,
@@ -356,6 +363,13 @@ function handleWsMessage(
       updateClasses(state, selector, data.add, data.remove)
         .then(() => log(`Class edit: ${selector} +[${data.add}] -[${data.remove}]`))
         .catch((e: any) => log(`Class edit failed: ${e.message}`));
+      break;
+    }
+    case "paste_element": {
+      const selector = data.fallbackSelector || data.selector;
+      insertElement(state, selector, "after", data.html)
+        .then(() => log(`Pasted after ${selector}`))
+        .catch((e: any) => log(`Paste failed: ${e.message}`));
       break;
     }
     case "list_assets": {

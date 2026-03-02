@@ -15,6 +15,7 @@ import {
   showClassEditor,
   hideClassEditor,
   getClassEditorInput,
+  flashElement,
 } from "./highlight";
 import { initDepthNavigation, clearDepthNavigation } from "./depth";
 import { updateTableControls, hideTableControls } from "./table-controls";
@@ -26,6 +27,7 @@ let editingElement: HTMLElement | null = null;
 let editOriginalText: string = "";
 let classEditingElement: Element | null = null;
 let classEditOriginal: string = "";
+let yankedHtml: string | null = null;
 
 function getSelectedElement(): Element | null {
   return selectedElements[selectedElements.length - 1] ?? null;
@@ -613,6 +615,32 @@ function init() {
             });
             input.focus();
             input.select();
+          }
+          return;
+        }
+
+        // "y" to yank (copy) selected element
+        if (eventName === "keydown" && !hasModifier && (e as KeyboardEvent).key === "y" && !isEditing() && !isClassEditing()) {
+          const sel = getSelectedElement();
+          if (sel) {
+            yankedHtml = sel.outerHTML;
+            flashElement(generateSelector(sel).selector);
+          }
+          return;
+        }
+
+        // "p" to paste yanked element after selection
+        if (eventName === "keydown" && !hasModifier && (e as KeyboardEvent).key === "p" && !isEditing() && !isClassEditing()) {
+          const sel = getSelectedElement();
+          if (sel && yankedHtml) {
+            const result = generateSelector(sel);
+            const fallback = generateFallbackSelector(sel);
+            send({
+              type: "paste_element",
+              selector: result.selector,
+              fallbackSelector: fallback,
+              html: yankedHtml,
+            });
           }
           return;
         }
