@@ -12,6 +12,7 @@ function stripDataMid(html: string): string {
   return html.replace(/\s+data-mid="[^"]*"/g, "");
 }
 
+
 function stripTailwindCdn(html: string): string {
   // Remove Tailwind CDN script tag
   return html.replace(

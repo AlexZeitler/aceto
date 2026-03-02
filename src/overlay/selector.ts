@@ -1,4 +1,4 @@
-import { send, getNextMid, getDefaults } from "./ws-client";
+import { send, on, getNextMid, getDefaults } from "./ws-client";
 import {
   initHighlightHost,
   showHover,
@@ -36,6 +36,7 @@ function getSelectedElement(): Element | null {
 export function toggleSelectMode() {
   selectMode = !selectMode;
   updateModeIndicator(selectMode);
+  document.documentElement.toggleAttribute("data-aceto-select-mode", selectMode);
   if (!selectMode) {
     hideHover();
     if (selectedElements.length > 0) {
@@ -273,12 +274,48 @@ function findAdjacentCell(
   return targetCells[nextCellIndex] as HTMLElement;
 }
 
-function expandShortcuts(text: string): string | null {
-  const trimmed = text.trim();
+function expandSingleShortcut(token: string): string | null {
   const defaults = getDefaults();
   const cls = defaults.checkbox ? ` class="${defaults.checkbox}"` : "";
-  if (trimmed === "[]") return `<input type="checkbox"${cls}>`;
-  if (trimmed === "[x]") return `<input type="checkbox" checked${cls}>`;
+  if (token === "[]") return `<input type="checkbox"${cls}>`;
+  if (token === "[x]") return `<input type="checkbox" checked${cls}>`;
+  const radioMatch = token.match(/^\(([^)]*)\)$/);
+  if (radioMatch) {
+    const inner = radioMatch[1];
+    if (inner === "" || inner === "o") {
+      const checked = inner === "o" ? " checked" : "";
+      return `<input type="radio"${checked}${cls}>`;
+    }
+    // Parse: (o|name:label) or (name:label) or (o|name) or (name)
+    const isChecked = inner.startsWith("o|");
+    const rest = isChecked ? inner.slice(2) : inner;
+    const colonIdx = rest.indexOf(":");
+    const name = colonIdx >= 0 ? rest.slice(0, colonIdx) : rest;
+    const label = colonIdx >= 0 ? rest.slice(colonIdx + 1) : "";
+    const checked = isChecked ? " checked" : "";
+    const nameAttr = name ? ` name="${name}"` : "";
+    const input = `<input type="radio"${nameAttr}${checked}${cls}>`;
+    if (label) {
+      return `<label>${input} ${label}</label>`;
+    }
+    return input;
+  }
+  if (token === "---") return `<hr>`;
+  return null;
+}
+
+function expandShortcuts(text: string): string | null {
+  const trimmed = text.trim();
+  // Try single shortcut first
+  const single = expandSingleShortcut(trimmed);
+  if (single) return single;
+  // Try multiple space-separated shortcuts
+  const tokens = trimmed.split(/\s+/);
+  if (tokens.length < 2) return null;
+  const expanded = tokens.map(expandSingleShortcut);
+  if (expanded.every((e) => e !== null)) {
+    return expanded.join("\n");
+  }
   return null;
 }
 
@@ -307,7 +344,7 @@ function isEditableElement(el: Element): boolean {
 
   // Also allow elements whose children are only text or inline elements
   const children = el.childNodes;
-  if (children.length === 0) return false;
+  if (children.length === 0) return true;
   for (const child of Array.from(children)) {
     if (child.nodeType === Node.TEXT_NODE) continue;
     if (child.nodeType === Node.ELEMENT_NODE) {
@@ -396,6 +433,11 @@ function commitEdit() {
     el.contentEditable = "false";
     el.style.outline = "";
     el.style.outlineOffset = "";
+
+    // contentEditable leaves <br> or empty text nodes — clear for :empty CSS
+    if (!newText) {
+      el.innerHTML = "";
+    }
 
     if (newText !== editOriginalText) {
       const result = generateSelector(el);
@@ -528,6 +570,15 @@ function handleClipboardPaste() {
 
 function init() {
   initHighlightHost();
+
+  // Mark select mode on <html> for CSS-driven empty-element visibility
+  document.documentElement.toggleAttribute("data-aceto-select-mode", selectMode);
+
+  // Inject styles to make empty elements visible in select mode
+  const emptyStyle = document.createElement("style");
+  emptyStyle.setAttribute("data-aceto-overlay", "");
+  emptyStyle.textContent = `html[data-aceto-select-mode] :is(div, p, span, section, article, aside, main, nav, header, footer, li, td, th, blockquote, figcaption, figure, h1, h2, h3, h4, h5, h6, a, label, button, dl, dt, dd, ul, ol, pre, code):empty { min-height: 1.5em; background: repeating-linear-gradient(45deg, transparent, transparent 4px, #e5e7eb 4px, #e5e7eb 5px); border-radius: 4px; }`;
+  document.head.appendChild(emptyStyle);
 
   // Set up mode toggle button
   const toggleBtn = getModeToggleButton();
@@ -764,6 +815,21 @@ function init() {
           return;
         }
 
+        // "d" to insert a div after selection and start editing
+        if (eventName === "keydown" && !hasModifier && (e as KeyboardEvent).key === "d" && !isEditing() && !isClassEditing() && !isTypingInFormElement) {
+          const sel = getSelectedElement();
+          if (sel) {
+            const result = generateSelector(sel);
+            const fallback = generateFallbackSelector(sel);
+            send({
+              type: "insert_div",
+              selector: result.selector,
+              fallbackSelector: fallback,
+            });
+          }
+          return;
+        }
+
         // DEL to delete selected element(s)
         if (eventName === "keydown" && (e as KeyboardEvent).key === "Delete") {
           if (selectedElements.length > 0) {
@@ -881,6 +947,18 @@ function init() {
     if (e.key === "e" && !selectMode && !isEditing()) {
       toggleSelectMode();
     }
+  });
+
+  // Auto-edit: server tells us to select and edit a newly inserted element
+  on("auto_edit", (data) => {
+    // Wait for morph to settle, then select and edit
+    setTimeout(() => {
+      const el = document.querySelector(data.selector) as HTMLElement | null;
+      if (el) {
+        selectElement(el);
+        startEditing(el);
+      }
+    }, 50);
   });
 }
 

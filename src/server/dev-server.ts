@@ -183,6 +183,12 @@ interface WsPasteElementMessage {
   html: string;
 }
 
+interface WsInsertDivMessage {
+  type: "insert_div";
+  selector: string;
+  fallbackSelector?: string;
+}
+
 interface WsListAssetsMessage {
   type: "list_assets";
 }
@@ -192,7 +198,7 @@ interface WsPickAssetMessage {
   path: string;
 }
 
-type WsMessage = WsSelectMessage | WsMultiSelectMessage | WsNavigateMessage | WsReadyMessage | WsDeselectMessage | WsTextEditMessage | WsValueEditMessage | WsCheckedEditMessage | WsUndoRedoMessage | WsDeleteElementMessage | WsTableOpMessage | WsShortcutExpandMessage | WsClassEditMessage | WsPasteElementMessage | WsListAssetsMessage | WsPickAssetMessage;
+type WsMessage = WsSelectMessage | WsMultiSelectMessage | WsNavigateMessage | WsReadyMessage | WsDeselectMessage | WsTextEditMessage | WsValueEditMessage | WsCheckedEditMessage | WsUndoRedoMessage | WsDeleteElementMessage | WsTableOpMessage | WsShortcutExpandMessage | WsClassEditMessage | WsPasteElementMessage | WsInsertDivMessage | WsListAssetsMessage | WsPickAssetMessage;
 
 function handleWsMessage(
   state: AppState,
@@ -429,6 +435,22 @@ function handleWsMessage(
       insertElement(state, selector, "after", data.html)
         .then(() => log(`Pasted after ${selector}`))
         .catch((e: any) => log(`Paste failed: ${e.message}`));
+      break;
+    }
+    case "insert_div": {
+      const selector = data.fallbackSelector || data.selector;
+      const mid = `m${state.nextMid++}`;
+      const divHtml = `<div data-mid="${mid}"></div>`;
+      insertElement(state, selector, "after", divHtml)
+        .then(() => {
+          log(`Inserted div after ${selector}`);
+          // Tell the browser to select and edit the new div
+          const msg = JSON.stringify({ type: "auto_edit", selector: `[data-mid="${mid}"]` });
+          if (state.activeClient && state.activeClient.readyState === 1) {
+            state.activeClient.send(msg);
+          }
+        })
+        .catch((e: any) => log(`Insert div failed: ${e.message}`));
       break;
     }
     case "list_assets": {

@@ -107,6 +107,7 @@ aceto add daisyui
 | `p` | Paste yanked element after selection |
 | `u` | Undo |
 | `r` | Redo |
+| `d` | Insert empty div after selection |
 | `a` | Open asset picker |
 | Del | Delete selected element |
 | Space | Toggle checkbox/radio (during edit mode) |
