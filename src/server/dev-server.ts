@@ -6,8 +6,18 @@ import type { AppState, SelectionData } from "../state";
 import { pushSelectionHistory, getNextMid, getFileHistory } from "../state";
 import { injectOverlay } from "./inject";
 import { handleMcpRequest } from "../mcp/server";
-import { addDataMid, updateText, getPages } from "../utils/html-parser";
-import { undo, redo, deleteElement, insertElement } from "../mcp/html-ops";
+import { addDataMid, updateText, getPages, extractBodyContent } from "../utils/html-parser";
+import {
+  undo,
+  redo,
+  deleteElement,
+  insertElement,
+  tableAddRow,
+  tableRemoveRow,
+  tableAddCol,
+  tableRemoveCol,
+  replaceElement,
+} from "../mcp/html-ops";
 
 const MIME_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -113,7 +123,22 @@ interface WsDeleteElementMessage {
   selector: string;
 }
 
-type WsMessage = WsSelectMessage | WsNavigateMessage | WsReadyMessage | WsDeselectMessage | WsTextEditMessage | WsUndoRedoMessage | WsDeleteElementMessage;
+interface WsTableOpMessage {
+  type: "table_op";
+  action: "add-row" | "remove-row" | "add-col" | "remove-col";
+  tableSelector: string;
+  rowSelector?: string;
+  colIndex?: number;
+}
+
+interface WsShortcutExpandMessage {
+  type: "shortcut_expand";
+  selector: string;
+  fallbackSelector?: string;
+  html: string;
+}
+
+type WsMessage = WsSelectMessage | WsNavigateMessage | WsReadyMessage | WsDeselectMessage | WsTextEditMessage | WsUndoRedoMessage | WsDeleteElementMessage | WsTableOpMessage | WsShortcutExpandMessage;
 
 function handleWsMessage(
   state: AppState,
@@ -180,6 +205,7 @@ function handleWsMessage(
         if (newHtml !== html) {
           const history = getFileHistory(state, filePath);
           history.pushEdit(html, newHtml);
+          state.recentServerWrites.add(filePath);
           writeFileSync(filePath, newHtml, "utf-8");
           log(`Text edit: ${selector} → "${data.text.slice(0, 50)}"`);
         }
@@ -209,6 +235,57 @@ function handleWsMessage(
       });
       break;
     }
+    case "table_op": {
+      const { action, tableSelector, rowSelector, colIndex } = data;
+      let promise: Promise<any>;
+      switch (action) {
+        case "add-row":
+          promise = tableAddRow(state, tableSelector);
+          break;
+        case "remove-row":
+          promise = tableRemoveRow(state, tableSelector, rowSelector!);
+          break;
+        case "add-col":
+          promise = tableAddCol(state, tableSelector);
+          break;
+        case "remove-col":
+          promise = tableRemoveCol(state, tableSelector, colIndex!);
+          break;
+        default:
+          log(`Unknown table_op action: ${action}`);
+          return;
+      }
+      promise
+        .then(() => log(`Table op: ${action} on ${tableSelector}`))
+        .catch((e: any) => log(`Table op failed: ${e.message}`));
+      break;
+    }
+    case "shortcut_expand": {
+      try {
+        const filePath = resolveCurrentFilePath(state);
+        const html = readFileSync(filePath, "utf-8");
+        const selector = data.fallbackSelector || data.selector;
+        // Replace inner content of the element with the expanded HTML
+        const newHtml = updateText(html, selector, data.html);
+        if (newHtml !== html) {
+          const history = getFileHistory(state, filePath);
+          history.pushEdit(html, newHtml);
+          state.recentServerWrites.add(filePath);
+          writeFileSync(filePath, newHtml, "utf-8");
+          const bodyContent = extractBodyContent(newHtml);
+          if (bodyContent !== null) {
+            broadcast(state, { type: "update", html: bodyContent });
+            broadcast(state, { type: "flash", selector });
+          } else {
+            broadcast(state, { type: "reload" });
+          }
+          log(`Shortcut expand: ${selector} → "${data.html}"`);
+        }
+      } catch (e: any) {
+        log(`Shortcut expand failed: ${e.message}`);
+      }
+      break;
+    }
   }
 }
 
@@ -225,6 +302,7 @@ function persistDataMid(state: AppState, fallbackSelector: string, mid: string) 
     const html = readFileSync(filePath, "utf-8");
     const newHtml = addDataMid(html, fallbackSelector, mid);
     if (newHtml !== html) {
+      state.recentServerWrites.add(filePath);
       writeFileSync(filePath, newHtml, "utf-8");
       log(`Persisted data-mid="${mid}" via ${fallbackSelector}`);
     }

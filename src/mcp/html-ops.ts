@@ -5,6 +5,7 @@ import type { AppState } from "../state";
 import { getFileHistory } from "../state";
 import * as parser from "../utils/html-parser";
 import type { InsertPosition } from "../utils/html-parser";
+import * as tableOps from "../utils/table-ops";
 import { broadcast } from "../server/dev-server";
 import { INIT_HTML } from "../cli";
 
@@ -303,6 +304,57 @@ export function scrollTo(state: AppState, selector: string) {
 }
 
 // --- Screenshot ---
+
+// --- Table Operations ---
+
+export async function tableAddRow(state: AppState, tableSelector: string) {
+  validateSelector(tableSelector);
+  const filePath = resolveCurrentFile(state);
+  const html = await readFile(filePath, "utf-8");
+  const newHtml = tableOps.addRow(html, tableSelector);
+  await writeWithHistory(state, filePath, html, newHtml);
+  broadcastUpdate(state, newHtml, tableSelector);
+  return { success: true, tableSelector };
+}
+
+export async function tableRemoveRow(
+  state: AppState,
+  tableSelector: string,
+  rowSelector: string,
+) {
+  validateSelector(tableSelector);
+  validateSelector(rowSelector);
+  const filePath = resolveCurrentFile(state);
+  const html = await readFile(filePath, "utf-8");
+  const newHtml = tableOps.removeRow(html, tableSelector, rowSelector);
+  await writeWithHistory(state, filePath, html, newHtml);
+  broadcastUpdate(state, newHtml, tableSelector);
+  return { success: true, tableSelector };
+}
+
+export async function tableAddCol(state: AppState, tableSelector: string) {
+  validateSelector(tableSelector);
+  const filePath = resolveCurrentFile(state);
+  const html = await readFile(filePath, "utf-8");
+  const newHtml = tableOps.addCol(html, tableSelector);
+  await writeWithHistory(state, filePath, html, newHtml);
+  broadcastUpdate(state, newHtml, tableSelector);
+  return { success: true, tableSelector };
+}
+
+export async function tableRemoveCol(
+  state: AppState,
+  tableSelector: string,
+  colIndex: number,
+) {
+  validateSelector(tableSelector);
+  const filePath = resolveCurrentFile(state);
+  const html = await readFile(filePath, "utf-8");
+  const newHtml = tableOps.removeCol(html, tableSelector, colIndex);
+  await writeWithHistory(state, filePath, html, newHtml);
+  broadcastUpdate(state, newHtml, tableSelector);
+  return { success: true, tableSelector };
+}
 
 export async function getScreenshot(state: AppState, selector?: string) {
   const { captureScreenshot } = await import("../screenshot");

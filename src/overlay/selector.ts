@@ -12,6 +12,7 @@ import {
   updateModeIndicator,
 } from "./highlight";
 import { initDepthNavigation, clearDepthNavigation } from "./depth";
+import { updateTableControls, hideTableControls } from "./table-controls";
 
 let selectedElement: Element | null = null;
 let selectMode = true;
@@ -136,6 +137,7 @@ function selectElement(el: Element) {
   const meta = getElementMeta(el);
 
   setUserSelector(result.selector);
+  updateTableControls(el);
 
   send({
     type: "select",
@@ -154,6 +156,7 @@ export function setSelectedElement(el: Element | null) {
   selectedElement = el;
   if (el) {
     showSelection(el);
+    updateTableControls(el);
     const result = generateSelector(el);
     const meta = getElementMeta(el);
     send({
@@ -165,6 +168,7 @@ export function setSelectedElement(el: Element | null) {
     });
   } else {
     hideSelection();
+    hideTableControls();
   }
 }
 
@@ -175,6 +179,51 @@ const EDITABLE_TAGS = new Set([
   "span", "a", "li", "td", "th", "label", "button",
   "dt", "dd", "figcaption", "blockquote", "cite", "em", "strong", "b", "i", "u", "small",
 ]);
+
+function findAdjacentCell(
+  cell: Element,
+  direction: 1 | -1,
+): HTMLElement | null {
+  const row = cell.parentElement;
+  if (!row || row.tagName.toLowerCase() !== "tr") return null;
+  const table = row.closest("table");
+  if (!table) return null;
+
+  const allRows = Array.from(table.querySelectorAll("tr"));
+  const rowIndex = allRows.indexOf(row as HTMLTableRowElement);
+  const cells = Array.from(row.querySelectorAll("td, th"));
+  const cellIndex = cells.indexOf(cell as HTMLTableCellElement);
+
+  let nextRowIndex = rowIndex;
+  let nextCellIndex = cellIndex + direction;
+
+  if (nextCellIndex >= cells.length) {
+    // Move to first cell of next row
+    nextRowIndex++;
+    nextCellIndex = 0;
+  } else if (nextCellIndex < 0) {
+    // Move to last cell of previous row
+    nextRowIndex--;
+    if (nextRowIndex < 0) return null;
+    const prevCells = allRows[nextRowIndex].querySelectorAll("td, th");
+    nextCellIndex = prevCells.length - 1;
+  }
+
+  if (nextRowIndex < 0 || nextRowIndex >= allRows.length) return null;
+
+  const targetRow = allRows[nextRowIndex];
+  const targetCells = targetRow.querySelectorAll("td, th");
+  if (nextCellIndex < 0 || nextCellIndex >= targetCells.length) return null;
+
+  return targetCells[nextCellIndex] as HTMLElement;
+}
+
+function expandShortcuts(text: string): string | null {
+  const trimmed = text.trim();
+  if (trimmed === "[]") return '<input type="checkbox">';
+  if (trimmed === "[x]") return '<input type="checkbox" checked>';
+  return null;
+}
 
 function isEditableElement(el: Element): boolean {
   const tag = el.tagName.toLowerCase();
@@ -229,12 +278,25 @@ function commitEdit() {
   if (newText !== editOriginalText) {
     const result = generateSelector(el);
     const fallback = generateFallbackSelector(el);
-    send({
-      type: "text_edit",
-      selector: result.selector,
-      fallbackSelector: fallback,
-      text: newText,
-    });
+
+    // Check for content shortcuts
+    const expanded = expandShortcuts(newText);
+    if (expanded) {
+      // Replace the element's innerHTML with the expanded HTML
+      send({
+        type: "shortcut_expand",
+        selector: result.selector,
+        fallbackSelector: fallback,
+        html: expanded,
+      });
+    } else {
+      send({
+        type: "text_edit",
+        selector: result.selector,
+        fallbackSelector: fallback,
+        text: newText,
+      });
+    }
   }
 
   editingElement = null;
@@ -357,10 +419,11 @@ function init() {
         if (isEditing()) {
           const target = e.target as Element;
           if (editingElement && (editingElement === target || editingElement.contains(target))) {
-            // Handle Enter and Escape during editing
+            // Handle Enter, Escape, Tab during editing
             if (eventName === "keydown") {
-              const key = (e as KeyboardEvent).key;
-              if (key === "Enter" && !(e as KeyboardEvent).shiftKey) {
+              const ke = e as KeyboardEvent;
+              const key = ke.key;
+              if (key === "Enter" && !ke.shiftKey) {
                 e.preventDefault();
                 commitEdit();
                 return;
@@ -368,6 +431,22 @@ function init() {
               if (key === "Escape") {
                 e.preventDefault();
                 cancelEdit();
+                return;
+              }
+              if (key === "Tab") {
+                e.preventDefault();
+                const currentCell = editingElement;
+                commitEdit();
+                if (currentCell) {
+                  const nextCell = findAdjacentCell(
+                    currentCell,
+                    ke.shiftKey ? -1 : 1,
+                  );
+                  if (nextCell) {
+                    selectElement(nextCell);
+                    startEditing(nextCell);
+                  }
+                }
                 return;
               }
             }
@@ -394,6 +473,7 @@ function init() {
           if (selectedElement) {
             selectedElement = null;
             hideSelection();
+            hideTableControls();
             setUserSelector("");
             clearDepthNavigation();
             send({ type: "deselect" });
@@ -460,9 +540,13 @@ function init() {
     (e) => {
       if (!isEditing()) return;
       if (editingElement && e.target === editingElement) {
-        // Small delay to allow click-outside to be handled first
+        // Capture the element that lost focus — if Tab already started
+        // editing a new cell, editingElement will have changed by the
+        // time the timeout fires, so we must only commit if the blurred
+        // element is still the one being edited.
+        const blurredEl = editingElement;
         setTimeout(() => {
-          if (isEditing()) commitEdit();
+          if (editingElement === blurredEl) commitEdit();
         }, 100);
       }
     },

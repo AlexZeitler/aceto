@@ -9,6 +9,7 @@ import {
   updatePageList,
 } from "./highlight";
 import { initDebugScreens } from "./debug-screens";
+import { refreshTableControlsAfterMorph } from "./table-controls";
 
 type MessageHandler = (data: any) => void;
 
@@ -64,6 +65,7 @@ on("reload", () => {
 // DOM morphing update
 on("update", (data) => {
   Idiomorph.morph(document.body, data.html, { morphStyle: "innerHTML" });
+  refreshTableControlsAfterMorph();
   send({ type: "ready" });
 });
 

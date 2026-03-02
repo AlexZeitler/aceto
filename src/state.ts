@@ -71,6 +71,7 @@ export interface AppState {
   nextMid: number;
   twDebug: string | null;
   lastPastedImage: string | null;
+  recentServerWrites: Set<string>;
 }
 
 export function getNextMid(state: AppState): string {
@@ -118,5 +119,6 @@ export function createState(opts: {
     nextMid: 1,
     twDebug: opts.twDebug ?? null,
     lastPastedImage: null,
+    recentServerWrites: new Set(),
   };
 }

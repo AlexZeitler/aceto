@@ -24,10 +24,21 @@ export function startFileWatcher(state: AppState) {
         filename,
         setTimeout(async () => {
           debounceTimers.delete(filename);
+
+          const filePath = path.join(state.projectDir, filename);
+
+          // Skip broadcast if this file was just written by the server
+          // (e.g. text_edit, table_op from browser) — the client already
+          // has the correct state and a morph would disrupt editing.
+          if (state.recentServerWrites.delete(filePath)) {
+            log(`File changed (server-write, skip broadcast): ${filename}`);
+            broadcastPageList(state);
+            return;
+          }
+
           log(`File changed: ${filename}`);
 
           try {
-            const filePath = path.join(state.projectDir, filename);
             const html = await readFile(filePath, "utf-8");
             const bodyContent = extractBodyContent(html);
 

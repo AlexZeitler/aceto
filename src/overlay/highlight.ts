@@ -13,6 +13,7 @@ let redoButton: HTMLElement | null = null;
 let pasteImageIndicator: HTMLElement | null = null;
 let pageButton: HTMLElement | null = null;
 let pageDropdown: HTMLElement | null = null;
+let tableToolbar: HTMLElement | null = null;
 
 let currentUserSelector = "";
 let currentAgentSelector = "";
@@ -256,6 +257,52 @@ export function initHighlightHost(): ShadowRoot {
       text-align: center;
       flex-shrink: 0;
     }
+    /* Table controls toolbar */
+    .aceto-table-toolbar {
+      position: fixed;
+      display: none;
+      align-items: center;
+      gap: 2px;
+      padding: 2px 4px;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 4px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      pointer-events: auto;
+      z-index: 2147483647;
+      white-space: nowrap;
+    }
+    .aceto-table-toolbar.visible {
+      display: flex;
+    }
+    .aceto-table-btn {
+      pointer-events: auto;
+      cursor: pointer;
+      padding: 2px 8px;
+      border-radius: 3px;
+      border: 1px solid transparent;
+      background: transparent;
+      font: 11px/1.4 ui-monospace, monospace;
+      color: #e2e8f0;
+      white-space: nowrap;
+      user-select: none;
+    }
+    .aceto-table-btn:hover {
+      background: #334155;
+      border-color: #475569;
+    }
+    .aceto-table-btn:disabled {
+      color: #475569;
+      cursor: default;
+      background: transparent;
+      border-color: transparent;
+    }
+    .aceto-table-sep {
+      width: 1px;
+      height: 16px;
+      background: #475569;
+      margin: 0 2px;
+    }
   `;
   shadowRoot.appendChild(style);
 
@@ -366,6 +413,11 @@ export function initHighlightHost(): ShadowRoot {
   shadowRoot.appendChild(breadcrumbBar);
   // Append dropdown to shadowRoot (not breadcrumbBar) to avoid overflow:hidden clipping
   shadowRoot.appendChild(pageDropdown);
+
+  // Table controls toolbar
+  tableToolbar = document.createElement("div");
+  tableToolbar.className = "aceto-table-toolbar";
+  shadowRoot.appendChild(tableToolbar);
 
   document.documentElement.appendChild(host);
   return shadowRoot;
@@ -567,6 +619,10 @@ export function getUndoButton(): HTMLElement | null {
 
 export function getRedoButton(): HTMLElement | null {
   return redoButton;
+}
+
+export function getTableToolbar(): HTMLElement | null {
+  return tableToolbar;
 }
 
 export function updateModeIndicator(isSelectMode: boolean) {
