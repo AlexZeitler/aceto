@@ -16,6 +16,8 @@ let pageButton: HTMLElement | null = null;
 let pageDropdown: HTMLElement | null = null;
 let tableToolbar: HTMLElement | null = null;
 let assetModal: HTMLElement | null = null;
+let commandModal: HTMLElement | null = null;
+let editBadge: HTMLElement | null = null;
 let classEditorInput: HTMLInputElement | null = null;
 
 let currentUserSelector = "";
@@ -411,6 +413,113 @@ export function initHighlightHost(): ShadowRoot {
       z-index: 2147483647;
       min-width: 200px;
     }
+    /* Command modal */
+    .aceto-cmd-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      pointer-events: auto;
+      z-index: 2147483647;
+    }
+    .aceto-cmd-backdrop.open {
+      display: flex;
+    }
+    .aceto-cmd-modal {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      max-width: 500px;
+      width: 90vw;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .aceto-cmd-header {
+      padding: 10px 14px;
+      font: 12px/1.4 ui-monospace, monospace;
+      color: #e2e8f0;
+      border-bottom: 1px solid #334155;
+    }
+    .aceto-cmd-textarea {
+      width: 100%;
+      min-height: 120px;
+      padding: 10px 14px;
+      background: #0f172a;
+      color: #e2e8f0;
+      font: 12px/1.6 ui-monospace, monospace;
+      border: none;
+      outline: none;
+      resize: vertical;
+      box-sizing: border-box;
+    }
+    .aceto-cmd-textarea::placeholder {
+      color: #475569;
+    }
+    .aceto-cmd-footer {
+      padding: 8px 14px;
+      border-top: 1px solid #334155;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .aceto-cmd-hint {
+      font: 10px/1.4 ui-monospace, monospace;
+      color: #64748b;
+    }
+    .aceto-cmd-buttons {
+      display: flex;
+      gap: 6px;
+    }
+    .aceto-cmd-btn {
+      padding: 4px 12px;
+      border-radius: 4px;
+      border: 1px solid #475569;
+      background: transparent;
+      color: #94a3b8;
+      font: 11px/1.4 ui-monospace, monospace;
+      cursor: pointer;
+    }
+    .aceto-cmd-btn:hover {
+      border-color: #64748b;
+      color: #e2e8f0;
+    }
+    .aceto-cmd-btn-primary {
+      background: #1e40af;
+      border-color: #1e40af;
+      color: #e2e8f0;
+    }
+    .aceto-cmd-btn-primary:hover {
+      background: #1d4ed8;
+      border-color: #1d4ed8;
+    }
+    /* Edit badge */
+    .aceto-edit-badge {
+      position: fixed;
+      display: none;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: rgba(15,23,42,0.75);
+      border: 1px solid rgba(51,65,85,0.75);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+      color: #cbd5e1;
+      font: 11px/1 ui-monospace, monospace;
+      cursor: pointer;
+      pointer-events: auto;
+      z-index: 2147483647;
+      user-select: none;
+      white-space: nowrap;
+    }
+    .aceto-edit-badge:hover {
+      background: #1e293b;
+      border-color: #475569;
+      color: #e2e8f0;
+    }
   `;
   shadowRoot.appendChild(style);
 
@@ -537,6 +646,18 @@ export function initHighlightHost(): ShadowRoot {
   assetModal = document.createElement("div");
   assetModal.className = "aceto-asset-backdrop";
   shadowRoot.appendChild(assetModal);
+
+  // Command modal
+  commandModal = document.createElement("div");
+  commandModal.className = "aceto-cmd-backdrop";
+  shadowRoot.appendChild(commandModal);
+
+  // Edit badge
+  editBadge = document.createElement("div");
+  editBadge.className = "aceto-edit-badge";
+  editBadge.textContent = "\u270E";
+  editBadge.title = "Edit";
+  shadowRoot.appendChild(editBadge);
 
   document.documentElement.appendChild(host);
   return shadowRoot;
@@ -774,6 +895,14 @@ export function getTableToolbar(): HTMLElement | null {
 
 export function getAssetModal(): HTMLElement | null {
   return assetModal;
+}
+
+export function getCommandModal(): HTMLElement | null {
+  return commandModal;
+}
+
+export function getEditBadge(): HTMLElement | null {
+  return editBadge;
 }
 
 export function updateModeIndicator(isSelectMode: boolean) {

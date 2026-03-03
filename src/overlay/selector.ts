@@ -20,6 +20,9 @@ import {
 import { initDepthNavigation, clearDepthNavigation } from "./depth";
 import { updateTableControls, hideTableControls } from "./table-controls";
 import { open as openAssetPicker, close as closeAssetPicker, isAssetPickerOpen } from "./asset-picker";
+import { getCommand } from "./commands";
+import { isCommandModalOpen, closeCommandModal } from "./command-modal";
+import { refreshEditBadges, hideEditBadges, showEditBadges, repositionEditBadges } from "./edit-badge";
 
 let selectedElements: Element[] = [];
 let selectMode = true;
@@ -39,6 +42,7 @@ export function toggleSelectMode() {
   document.documentElement.toggleAttribute("data-aceto-select-mode", selectMode);
   if (!selectMode) {
     hideHover();
+    hideEditBadges();
     if (selectedElements.length > 0) {
       selectedElements = [];
       hideSelection();
@@ -47,6 +51,8 @@ export function toggleSelectMode() {
       clearDepthNavigation();
       send({ type: "deselect" });
     }
+  } else {
+    showEditBadges();
   }
 }
 
@@ -69,7 +75,7 @@ interface SelectorResult {
   fallbackSelector?: string;
 }
 
-function generateFallbackSelector(el: Element): string {
+export function generateFallbackSelector(el: Element): string {
   if (el.id) return `#${CSS.escape(el.id)}`;
 
   const parts: string[] = [];
@@ -101,7 +107,7 @@ function generateFallbackSelector(el: Element): string {
   return parts.join(" > ");
 }
 
-function generateSelector(el: Element): SelectorResult {
+export function generateSelector(el: Element): SelectorResult {
   // Prefer existing data-mid
   const existingMid = el.getAttribute("data-mid");
   if (existingMid) {
@@ -443,6 +449,39 @@ function commitEdit() {
       const result = generateSelector(el);
       const fallback = generateFallbackSelector(el);
 
+      // Check for slash commands (e.g. /list, /table)
+      const trimmedText = newText.trim();
+      if (trimmedText.startsWith("/") && !trimmedText.includes(" ")) {
+        const cmdName = trimmedText.slice(1);
+        const cmd = getCommand(cmdName);
+        if (cmd) {
+          // Reset text and end editing
+          el.textContent = editOriginalText;
+          editingElement = null;
+          editOriginalText = "";
+          // Launch command handler — replace whole element (not inner content)
+          // so that e.g. <p> gets replaced by <ul> instead of nesting.
+          // Always send fallbackSelector so server can find the element
+          // even if data-mid wasn't persisted to the file.
+          cmd.handler({
+            mode: "create",
+            element: el,
+            selector: result.selector,
+            fallbackSelector: fallback,
+          }).then((html) => {
+            if (html !== null) {
+              send({
+                type: "command_replace" as any,
+                selector: result.selector,
+                fallbackSelector: fallback,
+                html,
+              });
+            }
+          });
+          return;
+        }
+      }
+
       // Check for content shortcuts
       const expanded = expandShortcuts(newText);
       if (expanded) {
@@ -626,6 +665,7 @@ function init() {
       eventName,
       (e) => {
         if (!selectMode) return;
+        if (isCommandModalOpen()) return;
         if (isOverlayElement(e.target as Element)) return;
 
         // While editing, allow normal keyboard/mouse interaction in the edited element
@@ -721,8 +761,9 @@ function init() {
           }
         }
 
-        // ESC — close asset picker first, then deselect
+        // ESC — close command modal first, then asset picker, then deselect
         if (eventName === "keydown" && (e as KeyboardEvent).key === "Escape") {
+          if (closeCommandModal()) return;
           if (isAssetPickerOpen()) {
             closeAssetPicker();
             return;
@@ -930,6 +971,7 @@ function init() {
   // Re-position selection overlay on scroll, hide hover
   document.addEventListener("scroll", () => {
     hideHover();
+    repositionEditBadges();
     const valid = selectedElements.filter((el) => document.contains(el));
     if (valid.length === 1) {
       showSelection(valid[0]);
@@ -948,6 +990,16 @@ function init() {
       toggleSelectMode();
     }
   });
+
+  // Refresh edit badges after DOM morph
+  on("update", () => {
+    if (selectMode) {
+      setTimeout(() => refreshEditBadges(), 50);
+    }
+  });
+
+  // Initial badge scan — defer so command modules are registered first
+  setTimeout(() => refreshEditBadges(), 0);
 
   // Auto-edit: server tells us to select and edit a newly inserted element
   on("auto_edit", (data) => {

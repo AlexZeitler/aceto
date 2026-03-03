@@ -6,7 +6,7 @@ import type { AppState, SelectionData } from "../state";
 import { pushSelectionHistory, getNextMid, getFileHistory } from "../state";
 import { injectOverlay } from "./inject";
 import { handleMcpRequest } from "../mcp/server";
-import { addDataMid, updateText, updateAttribute, setBooleanAttribute, uncheckRadioGroup, getPages, extractBodyContent } from "../utils/html-parser";
+import { addDataMid, updateText, updateAttribute, setBooleanAttribute, uncheckRadioGroup, getPages, extractBodyContent, replaceElement as parserReplaceElement } from "../utils/html-parser";
 import {
   undo,
   redo,
@@ -198,7 +198,14 @@ interface WsPickAssetMessage {
   path: string;
 }
 
-type WsMessage = WsSelectMessage | WsMultiSelectMessage | WsNavigateMessage | WsReadyMessage | WsDeselectMessage | WsTextEditMessage | WsValueEditMessage | WsCheckedEditMessage | WsUndoRedoMessage | WsDeleteElementMessage | WsTableOpMessage | WsShortcutExpandMessage | WsClassEditMessage | WsPasteElementMessage | WsInsertDivMessage | WsListAssetsMessage | WsPickAssetMessage;
+interface WsCommandReplaceMessage {
+  type: "command_replace";
+  selector: string;
+  fallbackSelector?: string;
+  html: string;
+}
+
+type WsMessage = WsSelectMessage | WsMultiSelectMessage | WsNavigateMessage | WsReadyMessage | WsDeselectMessage | WsTextEditMessage | WsValueEditMessage | WsCheckedEditMessage | WsUndoRedoMessage | WsDeleteElementMessage | WsTableOpMessage | WsShortcutExpandMessage | WsClassEditMessage | WsPasteElementMessage | WsInsertDivMessage | WsListAssetsMessage | WsPickAssetMessage | WsCommandReplaceMessage;
 
 function handleWsMessage(
   state: AppState,
@@ -478,6 +485,42 @@ function handleWsMessage(
       state.lastPastedImage = data.path;
       broadcast(state, { type: "image_pasted", path: data.path });
       log(`Asset picked: ${data.path}`);
+      break;
+    }
+    case "command_replace": {
+      try {
+        const filePath = resolveCurrentFilePath(state);
+        const html = readFileSync(filePath, "utf-8");
+        // Try primary selector first, fall back to fallbackSelector
+        let selector = data.selector;
+        let newHtml: string;
+        try {
+          newHtml = parserReplaceElement(html, selector, data.html);
+        } catch {
+          if (data.fallbackSelector) {
+            selector = data.fallbackSelector;
+            newHtml = parserReplaceElement(html, selector, data.html);
+          } else {
+            throw new Error(`Selector "${data.selector}" not found`);
+          }
+        }
+        if (newHtml !== html) {
+          const history = getFileHistory(state, filePath);
+          history.pushEdit(html, newHtml);
+          state.recentServerWrites.add(filePath);
+          writeFileSync(filePath, newHtml, "utf-8");
+          const bodyContent = extractBodyContent(newHtml);
+          if (bodyContent !== null) {
+            broadcast(state, { type: "update", html: bodyContent });
+            broadcast(state, { type: "flash", selector });
+          } else {
+            broadcast(state, { type: "reload" });
+          }
+          log(`Command replace: ${selector}`);
+        }
+      } catch (e: any) {
+        log(`Command replace failed: ${e.message}`);
+      }
       break;
     }
   }
