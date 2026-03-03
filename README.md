@@ -81,6 +81,7 @@ aceto add daisyui
 ### More Features
 
 - **Content shortcuts** — type `[]` or `[x]` in a cell to insert a checkbox
+- **Slash commands** — type `/list` in an empty element to open a modal for creating `<ul>`/`<ol>` lists. Edit badges appear on existing lists for quick re-editing via double-click.
 - **Element defaults** — define default classes for generated elements via `aceto.defaults.json`
 - **Paste images** — Ctrl+V with selection inserts instantly; without selection, stages the image for agent-driven placement
 - **Asset picker** — press `a` to browse and reuse previously pasted images from the assets folder
