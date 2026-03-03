@@ -31,3 +31,11 @@ export function getCommandForElement(el: Element): Command | undefined {
   }
   return undefined;
 }
+
+export function getAllEditSelectors(): string {
+  const selectors: string[] = [];
+  for (const cmd of commands.values()) {
+    if (cmd.editSelector) selectors.push(cmd.editSelector);
+  }
+  return selectors.join(", ");
+}

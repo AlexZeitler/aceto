@@ -4,3 +4,4 @@ import "./depth";
 import "./table-controls";
 import "./asset-picker";
 import "./commands/list";
+import "./commands/select";

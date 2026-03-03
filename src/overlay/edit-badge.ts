@@ -1,5 +1,5 @@
 import { getEditBadge } from "./highlight";
-import { getCommandForElement, type Command } from "./commands";
+import { getCommandForElement, getAllEditSelectors, type Command } from "./commands";
 import { generateSelector, generateFallbackSelector, setSelectedElement } from "./selector";
 import { send } from "./ws-client";
 
@@ -77,7 +77,9 @@ export function refreshEditBadges() {
   if (!visible) return;
 
   // Scan all elements on the page for command matches
-  const allElements = document.querySelectorAll("ul, ol");
+  const editSelector = getAllEditSelectors();
+  if (!editSelector) return;
+  const allElements = document.querySelectorAll(editSelector);
   for (const el of Array.from(allElements)) {
     const cmd = getCommandForElement(el);
     if (!cmd) continue;
